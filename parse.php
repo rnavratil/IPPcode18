@@ -67,6 +67,7 @@ foreach ($inputFile as $line){
     $ins->order = $index;
 
     // Zpracovani argumentu
+    // Stavovy automat
 
     $instructions[] =$ins;
     $index++;
