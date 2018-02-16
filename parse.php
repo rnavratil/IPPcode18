@@ -21,18 +21,55 @@ function ErrorOutput($number){
     }
 }
 
+
+class Instruction{
+    public $order; // Poradi instrukce.
+    public $opcode; // Hodnota operacniho kodu.
+    public $arguments = array(); // Argumenty instrukce.
+}
+
+// Objekty instrukci.
+$instructions = array();
+
+// Sada instrukci jazyka IPPcode18.
+$OperationCodes = array(
+    "MOVE", "CREATEFRAME", "PUSHFRAME", "POPFRAME", "DEFVAR", "CALL", "RETURN",
+    "ADD", "SUB", "MUL", "IDIV", "LT", "GT", "EQ", "AND", "OR", "NOT", "INT2CHAR", "STRI2INT",
+    "READ", "WRITE",
+    "CONCAT", "STRLEN", "GETCHAR", "SETCHAR",
+    "TYPE",
+    "LABEL", "JUMP", "JUMPIFEQ", "JUMPIFNEQ",
+    "DPRINT", "BREAK");
+
 // Osetreni vstupnich parametru.
 Params($argc, $argv);
 
 // Nacteni vstupu do pole.
-$inputFile = explode(PHP_EOL,file_get_contents("php://stdin"));
+//$inputFile = explode(PHP_EOL,file_get_contents("php://stdin"));
+$inputFile = array(".IPPcode18", "DEFVAR morgu", "EQ pes kocka"); //DEBUG
 
 // Osetreni a zpracovani prvniho radku.
 if (array_shift($inputFile) != ".IPPcode18")
     ErrorOutput(21);
 
 // Zpracování instrukcí.
-foreach ($inputFile as $row){
-    echo $row;
-    echo "b";
+$index = 1; // Pocitadlo poradi instrukce.
+foreach ($inputFile as $line){
+    // Zpracovani hodnoty operacniho kodu
+    preg_match("/^\S*/", $line, $operationCode); // Nalezeni opcode.
+    $operationCode = implode($operationCode);
+    $line = preg_replace("/^\S*/", "", $line); // Odstraneni opcode.
+    if (!(in_array($operationCode, $OperationCodes))) // Overeni opcode.
+        ErrorOutput(21);
+
+    $ins = new Instruction();
+    $ins->opcode = $operationCode;
+    $ins->order = $index;
+
+    // Zpracovani argumentu
+
+    $instructions[] =$ins;
+    $index++;
 }
+
+
