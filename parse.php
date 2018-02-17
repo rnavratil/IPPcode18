@@ -21,8 +21,7 @@ function ErrorOutput($number){
     }
 }
 
-
-class Instruction{
+class InstructionClass{
     public $order; // Poradi instrukce.
     public $opcode; // Hodnota operacniho kodu.
     public $arguments = array(); // Argumenty instrukce.
@@ -36,7 +35,7 @@ Params($argc, $argv);
 
 // Nacteni vstupu do pole.
 //$inputFile = explode(PHP_EOL,file_get_contents("php://stdin"));
-$inputFile = array("# adadad","  .IPPcode18", "  DEFVAR morgu", "EQ pes kocka"); //DEBUG
+$inputFile = array("# adadad","  .IPPcode18"," #poca" ,"  ADD var 4 5 #scitani", "EQ pes kocka"); //DEBUG
 
 // Zpracovani prvniho radku.
 foreach ($inputFile as $line){
@@ -68,13 +67,15 @@ foreach ($inputFile as $line){
 
     // Odstraneni komentare.
     $line = preg_replace("/#.*/", "", $line);
+    if(empty($line)) // Radek obsahoval pouze komentar.
+        continue;
 
     // Zpracovani hodnoty operacniho kodu
     preg_match("/^\S*/", $line, $operationCode); // Nalezeni opcode.
     $operationCode = strtoupper(implode($operationCode)); // Prevod na velka pismena.
     $line = preg_replace("/^\S*/", "", $line); // Odstraneni opcode ze zbytku radku.
 
-    $ins = new Instruction();
+    $ins = new InstructionClass();
     $ins->order = $index; // Poradi instrukce.
 
     // Zpracovani argumentu.
