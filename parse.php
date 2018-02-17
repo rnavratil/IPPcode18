@@ -31,46 +31,65 @@ class Instruction{
 // Objekty instrukci.
 $instructions = array();
 
-// Sada instrukci jazyka IPPcode18.
-$OperationCodes = array(
-    "MOVE", "CREATEFRAME", "PUSHFRAME", "POPFRAME", "DEFVAR", "CALL", "RETURN",
-    "ADD", "SUB", "MUL", "IDIV", "LT", "GT", "EQ", "AND", "OR", "NOT", "INT2CHAR", "STRI2INT",
-    "READ", "WRITE",
-    "CONCAT", "STRLEN", "GETCHAR", "SETCHAR",
-    "TYPE",
-    "LABEL", "JUMP", "JUMPIFEQ", "JUMPIFNEQ",
-    "DPRINT", "BREAK");
-
 // Osetreni vstupnich parametru.
 Params($argc, $argv);
 
 // Nacteni vstupu do pole.
 //$inputFile = explode(PHP_EOL,file_get_contents("php://stdin"));
-$inputFile = array(".IPPcode18", "DEFVAR morgu", "EQ pes kocka"); //DEBUG
+$inputFile = array("# adadad","  .IPPcode18", "  DEFVAR morgu", "EQ pes kocka"); //DEBUG
 
-// Osetreni a zpracovani prvniho radku.
-if (array_shift($inputFile) != ".IPPcode18")
+// Zpracovani prvniho radku.
+foreach ($inputFile as $line){
+    // Odstraneni mezer a tabulatoru na zacatku radku.
+    $line = trim($line," \t");
+
+    // Odstraneni komentare.
+    $line = preg_replace("/#.*/", "", $line);
+
+    // Nalezeni prvniho radku.
+    if(strtoupper($line) == ".IPPCODE18") {
+        array_shift($inputFile);
+        break;
+    }
+
+    // Odstraneni radku.
+    array_shift($inputFile);
+}
+
+// Nenalezeno klicove slovo '.IPPCODE18'.
+if(empty($inputFile))
     ErrorOutput(21);
 
-// Zpracování instrukcí.
+// Zpracování instrukci.
 $index = 1; // Pocitadlo poradi instrukce.
 foreach ($inputFile as $line){
+    // Odstraneni mezer a tabulatoru na zacatku radku.
+    $line = trim($line," \t");
+
+    // Odstraneni komentare.
+    $line = preg_replace("/#.*/", "", $line);
+
     // Zpracovani hodnoty operacniho kodu
     preg_match("/^\S*/", $line, $operationCode); // Nalezeni opcode.
-    $operationCode = implode($operationCode);
-    $line = preg_replace("/^\S*/", "", $line); // Odstraneni opcode.
-    if (!(in_array($operationCode, $OperationCodes))) // Overeni opcode.
-        ErrorOutput(21);
+    $operationCode = strtoupper(implode($operationCode)); // Prevod na velka pismena.
+    $line = preg_replace("/^\S*/", "", $line); // Odstraneni opcode ze zbytku radku.
 
     $ins = new Instruction();
-    $ins->opcode = $operationCode;
-    $ins->order = $index;
+    $ins->order = $index; // Poradi instrukce.
 
-    // Zpracovani argumentu
-    // Stavovy automat
+    // Zpracovani argumentu.
+    switch ($operationCode){
+        case "ADD":
+        case "SUB":
+        case "MUL":
+        case "IDIV":
+            $ins->opcode = $operationCode;
+            break;
+        default:
+            ErrorOutput(21);
+    }
+
 
     $instructions[] =$ins;
     $index++;
 }
-
-
