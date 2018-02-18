@@ -11,14 +11,29 @@ function Params($count,$parameters){
 
 function ErrorOutput($number){
     switch ($number){
-        case 21: // Lexikální nebo syntaktická chyba.
-            fwrite(STDERR,"21"); // TODO
+        case 1:
+            fwrite(STDERR,"Nenalezeno klicove slovo '.IPPCODE18'.");
             exit(21);
-
-        case 10: // Chyba vstupnich parametru.
-            fwrite(STDERR,"10"); // TODO
+        case 2:
+            fwrite(STDERR,"Pouzit neznamy operacni kod.");
+            exit(21);
+        case 3:
+            fwrite(STDERR,"Argument instrukce ma spatny typ.");
+            exit(21);
+        case 4:
+            fwrite(STDERR,"Nespravny pocet argumentu instrukce.");
+            exit(21);
+        case 21:
+            fwrite(STDERR,"Lexikální nebo syntaktická chyba.");
+            exit(21);
+        case 10:
+            fwrite(STDERR,"Chyba vstupnich parametru.");
             exit(10);
     }
+}
+
+function IsVariable($variable){
+    return true; //todo
 }
 
 class InstructionClass{
@@ -35,7 +50,7 @@ Params($argc, $argv);
 
 // Nacteni vstupu do pole.
 //$inputFile = explode(PHP_EOL,file_get_contents("php://stdin"));
-$inputFile = array("# adadad","  .IPPcode18"," #poca" ,"  ADD var 4 5 #scitani", "EQ pes kocka"); //DEBUG
+$inputFile = array("# adadad","  .IPPcode18"," #poca" ,"  ADD #scitani", "SUB var 3 2"); //DEBUG
 
 // Zpracovani prvniho radku.
 foreach ($inputFile as $line){
@@ -57,7 +72,7 @@ foreach ($inputFile as $line){
 
 // Nenalezeno klicove slovo '.IPPCODE18'.
 if(empty($inputFile))
-    ErrorOutput(21);
+    ErrorOutput(1);
 
 // Zpracování instrukci.
 $index = 1; // Pocitadlo poradi instrukce.
@@ -85,11 +100,33 @@ foreach ($inputFile as $line){
         case "MUL":
         case "IDIV":
             $ins->opcode = $operationCode;
-            break;
-        default:
-            ErrorOutput(21);
-    }
 
+            // Zpracovani promenne.
+            $line = trim($line," \t");
+            if(empty($line)) // Test na maly pocet argumentu instrukce.
+                ErrorOutput(4);
+            preg_match("/^\S*/", $line, $variable);
+            IsVariable(implode($variable)); // Validace promenne.
+            $line = preg_replace("/^\S*/", "", $line);
+            $ins->arguments = $variable;
+
+            // Zpracovani symbolu.
+            for($i = 0; $i < 2; $i++) {
+                $line = trim($line, " \t");
+                preg_match("/^\S*/", $line, $symbol);
+                $line = preg_replace("/^\S*/", "", $line);
+                if(($symbol=intval(implode($symbol))) == 0)
+                    ErrorOutput(3);
+                array_push($ins->arguments, $symbol);
+            }
+            // Test na prebytecne argumenty instrukce.
+            $line = trim($line, " \t");
+            if($line != null)
+                ErrorOutput(4);
+                break;
+        default:
+            ErrorOutput(2);
+    }
 
     $instructions[] =$ins;
     $index++;
