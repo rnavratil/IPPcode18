@@ -42,6 +42,23 @@ function IsVariable($variable){
     return $variable;
 }
 
+function Variable($line, $ins){
+    $line = trim($line," \t");
+    if(empty($line)) // Test na maly pocet argumentu instrukce.
+        ErrorOutput(4);
+    preg_match("/^\S*/", $line, $variable);
+    $variable = IsVariable(implode($variable)); // Validace promenne.
+    $line = preg_replace("/^\S*/", "", $line);
+    array_push($ins->arguments, $variable);
+    return $line;
+}
+
+function EndOfOperands($line){
+    $line = trim($line, " \t");
+    if($line != null)
+        ErrorOutput(4);
+}
+
 class InstructionClass{
     public $order; // Poradi instrukce.
     public $opcode; // Hodnota operacniho kodu.
@@ -101,21 +118,31 @@ foreach ($inputFile as $line){
 
     // Zpracovani argumentu.
     switch ($operationCode){
+        case "CREATEFRAME":
+        case "PUSHFRAME":
+        case "POPFRAME":
+        case "RETURN":
+        case "BREAK":
+            $ins->opcode = $operationCode;
+            // Test na prebytecne operandy instrukce.
+           EndOfOperands($line);
+            break;
+
+        case "DEFVAR":
+            $ins->opcode = $operationCode;
+            // Zpracovani promenne.
+            $line = Variable($line, $ins);
+            // Test na prebytecne operandy instrukce.
+            EndOfOperands($line);
+            break;
+
         case "ADD":
         case "SUB":
         case "MUL":
         case "IDIV":
             $ins->opcode = $operationCode;
-
             // Zpracovani promenne.
-            $line = trim($line," \t");
-            if(empty($line)) // Test na maly pocet argumentu instrukce.
-                ErrorOutput(4);
-            preg_match("/^\S*/", $line, $variable);
-            $variable = IsVariable(implode($variable)); // Validace promenne.
-            $line = preg_replace("/^\S*/", "", $line);
-            array_push($ins->arguments, $variable);
-
+            $line = Variable($line, $ins);
             // Zpracovani symbolu.
             for($i = 0; $i < 2; $i++) {
                 $line = trim($line, " \t");
@@ -125,11 +152,10 @@ foreach ($inputFile as $line){
                     ErrorOutput(3);
                 array_push($ins->arguments, $symbol);
             }
-            // Test na prebytecne argumenty instrukce.
-            $line = trim($line, " \t");
-            if($line != null)
-                ErrorOutput(4);
-                break;
+            // Test na prebytecne operandy instrukce.
+            EndOfOperands($line);
+            break;
+
         default:
             ErrorOutput(2);
     }
