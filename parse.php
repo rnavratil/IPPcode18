@@ -43,20 +43,29 @@ function IsVariable($variable){
 }
 
 function Variable($line, $ins){
+    $variable = GetOperand($line);
+    $variable = IsVariable($variable); // Validace promenne.
+    array_push($ins->arguments, $variable);
+    return $line;
+}
+
+function GetOperand(&$line){
     $line = trim($line," \t");
     if(empty($line)) // Test na maly pocet argumentu instrukce.
         ErrorOutput(4);
-    preg_match("/^\S*/", $line, $variable);
-    $variable = IsVariable(implode($variable)); // Validace promenne.
+    preg_match("/^\S*/", $line, $operand);
     $line = preg_replace("/^\S*/", "", $line);
-    array_push($ins->arguments, $variable);
-    return $line;
+    return implode($operand);
 }
 
 function EndOfOperands($line){
     $line = trim($line, " \t");
     if($line != null)
         ErrorOutput(4);
+}
+
+function XmlOutput($instructions){
+    //TODO
 }
 
 class InstructionClass{
@@ -145,13 +154,31 @@ foreach ($inputFile as $line){
             $line = Variable($line, $ins);
             // Zpracovani symbolu.
             for($i = 0; $i < 2; $i++) {
-                $line = trim($line, " \t");
-                preg_match("/^\S*/", $line, $symbol);
-                $line = preg_replace("/^\S*/", "", $line);
-                if(($symbol=intval(implode($symbol))) == 0)
+                $symbol = GetOperand($line);
+                if(($symbol=intval($symbol)) == 0)
                     ErrorOutput(3);
                 array_push($ins->arguments, $symbol);
             }
+            // Test na prebytecne operandy instrukce.
+            EndOfOperands($line);
+            break;
+
+        case "WRITE":
+            $ins->opcode = $operationCode;
+            // Zpracovani operandu.
+            $symbol = GetOperand($line);
+            array_push($ins->arguments, $symbol);
+            // Test na prebytecne operandy instrukce.
+            EndOfOperands($line);
+            break;
+
+        case "STRLEN":
+            $ins->opcode = $operationCode;
+            // Zpracovani promenne.
+            $line = Variable($line, $ins);
+            // Zpracovani operandu.
+            $symbol = GetOperand($line);
+            array_push($ins->arguments, $symbol);
             // Test na prebytecne operandy instrukce.
             EndOfOperands($line);
             break;
@@ -163,3 +190,4 @@ foreach ($inputFile as $line){
     $instructions[] =$ins;
     $index++;
 }
+XmlOutput($instructions);
