@@ -23,6 +23,9 @@ function ErrorOutput($number){
         case 4:
             fwrite(STDERR,"Nespravny pocet argumentu instrukce.");
             exit(21);
+        case 5:
+            fwrite(STDERR,"Nespravny format promenne");
+            exit(21);
         case 21:
             fwrite(STDERR,"Lexikální nebo syntaktická chyba.");
             exit(21);
@@ -33,7 +36,10 @@ function ErrorOutput($number){
 }
 
 function IsVariable($variable){
-    return true; //todo
+    if(!preg_match("/^(LF|lf|lF|Lf|GF|gf|gF|Gf|TF|tf|Tf|tF)@([a-zA-Z\_$\-\&\%\*]+)$/", $variable,$kkt ))
+        ErrorOutput(5);
+    $variable = strtoupper( substr( $variable, 0, 2 ) ).substr( $variable, 2 );
+    return $variable;
 }
 
 class InstructionClass{
@@ -50,7 +56,7 @@ Params($argc, $argv);
 
 // Nacteni vstupu do pole.
 //$inputFile = explode(PHP_EOL,file_get_contents("php://stdin"));
-$inputFile = array("# adadad","  .IPPcode18"," #poca" ,"  ADD #scitani", "SUB var 3 2"); //DEBUG
+$inputFile = array("# adadad","  .IPPcode18"," #poca" ,"  ADD Gf@\$fafe 3 5 #scitani"); //DEBUG
 
 // Zpracovani prvniho radku.
 foreach ($inputFile as $line){
@@ -106,9 +112,9 @@ foreach ($inputFile as $line){
             if(empty($line)) // Test na maly pocet argumentu instrukce.
                 ErrorOutput(4);
             preg_match("/^\S*/", $line, $variable);
-            IsVariable(implode($variable)); // Validace promenne.
+            $variable = IsVariable(implode($variable)); // Validace promenne.
             $line = preg_replace("/^\S*/", "", $line);
-            $ins->arguments = $variable;
+            array_push($ins->arguments, $variable);
 
             // Zpracovani symbolu.
             for($i = 0; $i < 2; $i++) {
