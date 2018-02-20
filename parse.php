@@ -35,17 +35,36 @@ function ErrorOutput($number){
     }
 }
 
+/*  IsVariable: funkce na kontrolu formatu promenne.
+ *  Vstupni hodnota: Textovy retezec.
+ *  Navratove hodnoty:
+ *      1 - Jedna se o promennou.
+ *      0 - Nejedna se o promennou.
+ * */
 function IsVariable($variable){
     if(!preg_match("/^(LF|lf|lF|Lf|GF|gf|gF|Gf|TF|tf|Tf|tF)@([a-zA-Z\_$\-\&\%\*]+)$/", $variable,$tmp ))
+        return 0; //ErrorOutput(5);
+    //$variable = strtoupper( substr( $variable, 0, 2 ) ).substr( $variable, 2 );
+    return 1; //return $variable;
+}
+
+function Label($line, $ins){
+    $label = GetOperand($line);
+    if(!preg_match("/^([a-zA-Z\_$\-\&\%\*]+)$/", $label,$tmp ))
         ErrorOutput(5);
-    $variable = strtoupper( substr( $variable, 0, 2 ) ).substr( $variable, 2 );
-    return $variable;
+    array_push($ins->arguments, $label);
+    array_push($ins->types, "label");
+    return $line;
 }
 
 function Variable($line, $ins){
     $variable = GetOperand($line);
-    $variable = IsVariable($variable); // Validace promenne.
+    //$variable = IsVariable($variable); // Validace promenne.
+    if (!isVariable($variable))
+        ErrorOutput(5);
+    $variable = strtoupper( substr( $variable, 0, 2 ) ).substr( $variable, 2 );
     array_push($ins->arguments, $variable);
+    array_push($ins->types, "var");
     return $line;
 }
 
@@ -119,6 +138,7 @@ class InstructionClass{
     public $order; // Poradi instrukce.
     public $opcode; // Hodnota operacniho kodu.
     public $arguments = array(); // Argumenty instrukce.
+    public $types = array(); // Typy argumentu instrukce.
 }
 
 // Objekty instrukci.
@@ -129,7 +149,7 @@ Params($argc, $argv);
 
 // Nacteni vstupu do pole.
 //$inputFile = explode(PHP_EOL,file_get_contents("php://stdin"));
-$inputFile = array("# adadad","  .IPPcode18"," STRLEN GF@mrdky string@p\\345ice<b\\032" ,"  ADD Gf@\$fafe int@3 int@5 #scitani"); //DEBUG
+$inputFile = array("# adadad","  .IPPcode18"," MOVE GF@mrdky string@p\\345ice<b\\032" ,"  ADD Gf@\$fafe int@3 int@5 #scitani"); //DEBUG
 
 // Zpracovani prvniho radku.
 foreach ($inputFile as $line){
@@ -174,6 +194,25 @@ foreach ($inputFile as $line){
 
     // Zpracovani argumentu.
     switch ($operationCode){
+        case "MOVE":
+            $ins->opcode = $operationCode;
+            // Zpracovani promenne.
+            $line = Variable($line, $ins);
+            // Zpracovani symbolu.
+            $symbol = GetOperand($line);
+            if (IsVariable($symbol)) {
+                $line = Variable($line, $ins); // Zpracuj promennou.
+                array_push($ins->arguments, $symbol);
+            }
+            else { // Zjisti typ operandu.
+                $tmpType = WhatType($symbol);
+                array_push($ins->types, $tmpType);
+                array_push($ins->arguments, substr($symbol, strlen($tmpType) + 1));
+            }
+            // Test na prebytecne operandy instrukce.
+            EndOfOperands($line);
+            break;
+
         case "CREATEFRAME":
         case "PUSHFRAME":
         case "POPFRAME":
@@ -192,6 +231,14 @@ foreach ($inputFile as $line){
             EndOfOperands($line);
             break;
 
+        case "CALL":
+            $ins->opcode = $operationCode;
+            // Zpracovani labelu.
+            $line = Label($line, $ins);
+            // Test na prebytecne operandy instrukce.
+            EndOfOperands($line);
+            break;
+
         case "ADD":
         case "SUB":
         case "MUL":
@@ -202,9 +249,11 @@ foreach ($inputFile as $line){
             // Zpracovani symbolu.
             for($i = 0; $i < 2; $i++) {
                 $symbol = GetOperand($line);
-                if(WhatType($symbol) != "int")
+                $tmpType = WhatType($symbol);
+                if($tmpType != "int")
                     ErrorOutput(3);
-                array_push($ins->arguments, $symbol);
+                array_push($ins->types, $tmpType);
+                array_push($ins->arguments, substr($symbol, strlen($tmpType) + 1));
             }
             // Test na prebytecne operandy instrukce.
             EndOfOperands($line);
