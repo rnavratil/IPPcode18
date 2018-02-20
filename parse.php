@@ -18,13 +18,13 @@ function ErrorOutput($number){
             fwrite(STDERR,"Pouzit neznamy operacni kod.");
             exit(21);
         case 3:
-            fwrite(STDERR,"Argument instrukce ma spatny typ.");
+            fwrite(STDERR,"Operand instrukce ma spatny typ.");
             exit(21);
         case 4:
             fwrite(STDERR,"Nespravny pocet argumentu instrukce.");
             exit(21);
         case 5:
-            fwrite(STDERR,"Nespravny format promenne");
+            fwrite(STDERR,"Nespravny format operandu.");
             exit(21);
         case 21:
             fwrite(STDERR,"Lexikální nebo syntaktická chyba.");
@@ -36,7 +36,7 @@ function ErrorOutput($number){
 }
 
 function IsVariable($variable){
-    if(!preg_match("/^(LF|lf|lF|Lf|GF|gf|gF|Gf|TF|tf|Tf|tF)@([a-zA-Z\_$\-\&\%\*]+)$/", $variable,$kkt ))
+    if(!preg_match("/^(LF|lf|lF|Lf|GF|gf|gF|Gf|TF|tf|Tf|tF)@([a-zA-Z\_$\-\&\%\*]+)$/", $variable,$tmp ))
         ErrorOutput(5);
     $variable = strtoupper( substr( $variable, 0, 2 ) ).substr( $variable, 2 );
     return $variable;
@@ -64,6 +64,53 @@ function EndOfOperands($line){
         ErrorOutput(4);
 }
 
+function WhatType($operand){
+    if(preg_match("/^bool@\S+$/", $operand,$tmp )) {
+        BoolChecker($operand);
+        return "bool";
+    }
+    elseif (preg_match("/^string@\S+$/", $operand,$tmp )) {
+        StringChecker($operand);
+        return "string";
+    }
+    elseif (preg_match("/^int@\S+$/", $operand,$tmp ))
+        return "int";
+    else
+        ErrorOutput(5);
+} // I know.
+
+function BoolChecker($operand){
+    $operand = substr($operand,4);
+    if(!preg_match("/^(true|false)$/", $operand,$tmp ))
+        ErrorOutput(5);
+}
+
+function StringChecker($operand){
+    $operand = substr($operand,7);
+    $operand = htmlentities($operand); // Prevod na XML entity.
+    // Kontrola tvaru escape sekvence.
+    $length = strlen($operand);
+    for($i = 1; $i <= $length; $i++) {
+        $char = substr($operand, 0, 1);
+        $operand = substr($operand, 1);
+
+        switch ($char){
+            default:
+                break;
+
+            case "\\":
+                    if(($i + 3) > $length)
+                        ErrorD(5);
+                    $i = $i + 3;
+                    $char = substr($operand, 0, 3);
+                    $operand = substr($operand, 3);
+                    if(!preg_match("/^[0-9][0-9][0-9]$/", $char,$tmp ))
+                        ErrorOutput(5);
+                    break;
+                }
+    }
+}
+
 function XmlOutput($instructions){
     //TODO
 }
@@ -82,7 +129,7 @@ Params($argc, $argv);
 
 // Nacteni vstupu do pole.
 //$inputFile = explode(PHP_EOL,file_get_contents("php://stdin"));
-$inputFile = array("# adadad","  .IPPcode18"," #poca" ,"  ADD Gf@\$fafe 3 5 #scitani"); //DEBUG
+$inputFile = array("# adadad","  .IPPcode18"," STRLEN GF@mrdky string@p\\345ice<b\\032" ,"  ADD Gf@\$fafe int@3 int@5 #scitani"); //DEBUG
 
 // Zpracovani prvniho radku.
 foreach ($inputFile as $line){
@@ -155,7 +202,7 @@ foreach ($inputFile as $line){
             // Zpracovani symbolu.
             for($i = 0; $i < 2; $i++) {
                 $symbol = GetOperand($line);
-                if(($symbol=intval($symbol)) == 0)
+                if(WhatType($symbol) != "int")
                     ErrorOutput(3);
                 array_push($ins->arguments, $symbol);
             }
@@ -164,6 +211,7 @@ foreach ($inputFile as $line){
             break;
 
         case "WRITE":
+        case "DPRINT":
             $ins->opcode = $operationCode;
             // Zpracovani operandu.
             $symbol = GetOperand($line);
@@ -178,6 +226,8 @@ foreach ($inputFile as $line){
             $line = Variable($line, $ins);
             // Zpracovani operandu.
             $symbol = GetOperand($line);
+            if(WhatType($symbol) != "string")
+                ErrorOutput(3);
             array_push($ins->arguments, $symbol);
             // Test na prebytecne operandy instrukce.
             EndOfOperands($line);
@@ -191,3 +241,4 @@ foreach ($inputFile as $line){
     $index++;
 }
 XmlOutput($instructions);
+return 0;
