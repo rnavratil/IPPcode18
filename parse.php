@@ -239,6 +239,25 @@ foreach ($inputFile as $line){
             EndOfOperands($line);
             break;
 
+        case "PUSHS":
+            $ins->opcode = $operationCode;
+            // Zpracovani symbolu.
+            $symbol = GetOperand($line);
+            $tmpType = WhatType($symbol);
+            array_push($ins->types, $tmpType);
+            array_push($ins->arguments, substr($symbol, strlen($tmpType) + 1));
+            // Test na prebytecne operandy instrukce.
+            EndOfOperands($line);
+            break;
+
+        case "POPS":
+            $ins->opcode = $operationCode;
+            // Zpracovani promenne.
+            $line = Variable($line, $ins);
+            // Test na prebytecne operandy instrukce.
+            EndOfOperands($line);
+            break;
+
         case "ADD":
         case "SUB":
         case "MUL":
@@ -259,16 +278,121 @@ foreach ($inputFile as $line){
             EndOfOperands($line);
             break;
 
+        case "LT":
+        case "GT":
+        case "EQ":
+            $ins->opcode = $operationCode;
+            // Zpracovani promenne.
+            $line = Variable($line, $ins);
+            // Zpracovani prvniho symbolu.
+            $symbol = GetOperand($line);
+            $tmpType = WhatType($symbol);
+            // Zpracovani druheho symbolu.
+            $symbol2 = GetOperand($line);
+            $tmpType2 = WhatType($symbol2);
+            // Kontrola typu.
+            if($tmpType != $tmpType2)
+                ErrorOutput(3);
+            // Zapis do objektu.
+            array_push($ins->types, $tmpType);
+            array_push($ins->arguments, substr($symbol, strlen($tmpType) + 1));
+            array_push($ins->types, $tmpType2);
+            array_push($ins->arguments, substr($symbol2, strlen($tmpType2) + 1));
+            // Test na prebytecne operandy instrukce.
+            EndOfOperands($line);
+            break;
+
+        case "CONCAT":
+        case "AND":
+        case "OR":
+            $ins->opcode = $operationCode;
+            // Zpracovani promenne.
+            $line = Variable($line, $ins);
+            // Zpracovani prvniho symbolu.
+            for ($i = 0; $i < 2; $i++) {
+                $symbol = GetOperand($line);
+                $tmpType = WhatType($symbol);
+                if ($tmpType != "bool")
+                    ErrorOutput(3);
+                array_push($ins->types, $tmpType);
+                array_push($ins->arguments, substr($symbol, strlen($tmpType) + 1));
+            }
+            // Test na prebytecne operandy instrukce.
+            EndOfOperands($line);
+            break;
+
+        case "NOT":
+            $ins->opcode = $operationCode;
+            // Zpracovani promenne.
+            $line = Variable($line, $ins);
+            // Zpracovani symbolu.
+            $symbol = GetOperand($line);
+            $tmpType = WhatType($symbol);
+            if ($tmpType != "bool")
+                ErrorOutput(3);
+            array_push($ins->types, $tmpType);
+            array_push($ins->arguments, substr($symbol, strlen($tmpType) + 1));
+            // Test na prebytecne operandy instrukce.
+            EndOfOperands($line);
+            break;
+
+        case "INT2CHAR":
+            $ins->opcode = $operationCode;
+            // Zpracovani promenne.
+            $line = Variable($line, $ins);
+            // Zpracovani prvniho symbolu.
+            $symbol = GetOperand($line);
+            $tmpType = WhatType($symbol);
+            if(!is_int($symbol))
+                ErrorOutput(3);
+            array_push($ins->types, $tmpType);
+            array_push($ins->arguments, substr($symbol, strlen($tmpType) + 1));
+            // Test na prebytecne operandy instrukce.
+            EndOfOperands($line);
+            break;
+
+        case "STRI2INT":
+            $ins->opcode = $operationCode;
+            // Zpracovani promenne.
+            $line = Variable($line, $ins);
+            // Zpracovani symbolu.
+            for ($i = 0; $i < 2; $i++) {
+                $symbol = GetOperand($line);
+                $tmpType = WhatType($symbol);
+                if ($i == 0 and $tmpType != "string")
+                    ErrorOutput(3);
+                elseif ($tmpType != "int")
+                    ErrorOutput(3);
+
+                array_push($ins->types, $tmpType);
+                array_push($ins->arguments, substr($symbol, strlen($tmpType) + 1));
+            }
+            // Test na prebytecne operandy instrukce.
+            EndOfOperands($line);
+            break;
+
+        case "READ":
+            $ins->opcode = $operationCode;
+            // Zpracovani promenne.
+            $line = Variable($line, $ins);
+            // Zpracovan symbolu.
+            $symbol = GetOperand($line);
+            array_push($ins->types, "type"); //TODO nema argument shit
+            // Test na prebytecne operandy instrukce.
+            EndOfOperands($line);
+            break;
+
         case "WRITE":
         case "DPRINT":
             $ins->opcode = $operationCode;
             // Zpracovani operandu.
             $symbol = GetOperand($line);
-            array_push($ins->arguments, $symbol);
+            $tmpType = WhatType($symbol);
+            array_push($ins->types, $tmpType);
             // Test na prebytecne operandy instrukce.
             EndOfOperands($line);
             break;
-
+            
         case "STRLEN":
             $ins->opcode = $operationCode;
             // Zpracovani promenne.
