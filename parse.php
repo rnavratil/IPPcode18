@@ -321,6 +321,7 @@ foreach ($inputFile as $line){
             EndOfOperands($line);
             break;
 
+        case "STRLEN":
         case "NOT":
             $ins->opcode = $operationCode;
             // Zpracovani promenne.
@@ -351,6 +352,7 @@ foreach ($inputFile as $line){
             EndOfOperands($line);
             break;
 
+        case "GETCHAR":
         case "STRI2INT":
             $ins->opcode = $operationCode;
             // Zpracovani promenne.
@@ -382,6 +384,25 @@ foreach ($inputFile as $line){
             EndOfOperands($line);
             break;
 
+        case "SETCHAR":
+            $ins->opcode = $operationCode;
+            // Zpracovani promenne.
+            $line = Variable($line, $ins);
+            // Zpracovani symbolu.
+            for ($i = 0; $i < 2; $i++) {
+                $symbol = GetOperand($line);
+                $tmpType = WhatType($symbol);
+                if ($i == 0 and $tmpType != "int")
+                    ErrorOutput(3);
+                elseif ($tmpType != "string")
+                    ErrorOutput(3);
+                array_push($ins->types, $tmpType);
+                array_push($ins->arguments, substr($symbol, strlen($tmpType) + 1));
+            }
+            // Test na prebytecne operandy instrukce.
+            EndOfOperands($line);
+            break;
+
         case "WRITE":
         case "DPRINT":
             $ins->opcode = $operationCode;
@@ -389,19 +410,6 @@ foreach ($inputFile as $line){
             $symbol = GetOperand($line);
             $tmpType = WhatType($symbol);
             array_push($ins->types, $tmpType);
-            // Test na prebytecne operandy instrukce.
-            EndOfOperands($line);
-            break;
-            
-        case "STRLEN":
-            $ins->opcode = $operationCode;
-            // Zpracovani promenne.
-            $line = Variable($line, $ins);
-            // Zpracovani operandu.
-            $symbol = GetOperand($line);
-            if(WhatType($symbol) != "string")
-                ErrorOutput(3);
-            array_push($ins->arguments, $symbol);
             // Test na prebytecne operandy instrukce.
             EndOfOperands($line);
             break;
