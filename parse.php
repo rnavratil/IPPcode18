@@ -37,7 +37,7 @@ function ErrorOutput($number){
 
 /*  IsVariable: funkce na kontrolu formatu promenne.
  *  Vstupni hodnota: Textovy retezec.
- *  Navratove hodnoty:
+ *  return :
  *      1 - Jedna se o promennou.
  *      0 - Nejedna se o promennou.
  * */
@@ -139,23 +139,28 @@ function StringChecker($operand){
  */
 function XmlOutput($instructions){
     $xml = new DOMDocument('1.0');
+    $xml->formatOutput = true;
     $program=$xml->createElement("program");
+    $program->setAttribute("language", "IPPcode18");
     $xml->appendChild($program);
     $index = 1;
     foreach ($instructions as $object){
         $instruction=$xml->createElement("instruction");
         $instruction->setAttribute("order", $index);
+        $instruction->setAttribute("opcode", $object->opcode);
         $program->appendChild($instruction);
 
-        //TODO foreach
-        $argument=$xml->createElement("argument", "yyy");
-        $argument->setAttribute("xxx", "dfdf");
-        $instruction->appendChild($argument);
+        $indexArg = 1;
+        foreach ($object->arguments as $argnt) {
+            $argument = $xml->createElement("arg$indexArg", $argnt);
+            $argument->setAttribute("type", array_shift($object->types));
+            $instruction->appendChild($argument);
+            $indexArg++;
+        }
 
         $index++;
     }
     echo $xml->saveXML();
-    //ech $xml;
 }
 
 class InstructionClass{
