@@ -133,8 +133,29 @@ function StringChecker($operand){
     }
 }
 
+/*
+ *
+ *
+ */
 function XmlOutput($instructions){
-    //TODO
+    $xml = new DOMDocument('1.0');
+    $program=$xml->createElement("program");
+    $xml->appendChild($program);
+    $index = 1;
+    foreach ($instructions as $object){
+        $instruction=$xml->createElement("instruction");
+        $instruction->setAttribute("order", $index);
+        $program->appendChild($instruction);
+
+        //TODO foreach
+        $argument=$xml->createElement("argument", "yyy");
+        $argument->setAttribute("xxx", "dfdf");
+        $instruction->appendChild($argument);
+
+        $index++;
+    }
+    echo $xml->saveXML();
+    //ech $xml;
 }
 
 class InstructionClass{
