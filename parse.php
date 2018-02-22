@@ -94,8 +94,11 @@ function WhatType($operand){
     }
     elseif (preg_match("/^int@\S+$/", $operand,$tmp ))
         return "int";
-    else
+    else {
+        if (IsVariable($operand))
+            return "var";
         ErrorOutput(5);
+    }
 } // I know.
 
 function BoolChecker($operand){
@@ -232,6 +235,8 @@ foreach ($inputFile as $line){
             break;
 
         case "CALL":
+        case "LABEL":
+        case "JUMP":
             $ins->opcode = $operationCode;
             // Zpracovani labelu.
             $line = Label($line, $ins);
@@ -392,10 +397,39 @@ foreach ($inputFile as $line){
             for ($i = 0; $i < 2; $i++) {
                 $symbol = GetOperand($line);
                 $tmpType = WhatType($symbol);
-                if ($i == 0 and $tmpType != "int")
+                if ($i == 0 and $tmpType != "int") //TODO tohle sem nepatri. ma to byt jak u JUMIFEQ, ZKonktroluj more.
                     ErrorOutput(3);
                 elseif ($tmpType != "string")
                     ErrorOutput(3);
+                array_push($ins->types, $tmpType);
+                array_push($ins->arguments, substr($symbol, strlen($tmpType) + 1));
+            }
+            // Test na prebytecne operandy instrukce.
+            EndOfOperands($line);
+            break;
+
+        case "TYPE":
+            $ins->opcode = $operationCode;
+            // Zpracovani promenne.
+            $line = Variable($line, $ins);
+            // Zpracovani symbolu.
+            $symbol = GetOperand($line);
+            $tmpType = WhatType($symbol);
+            array_push($ins->types, $tmpType);
+            array_push($ins->arguments, substr($symbol, strlen($tmpType) + 1));
+            // Test na prebytecne operandy instrukce.
+            EndOfOperands($line);
+            break;
+
+        case "JUMPIFEQ":
+        case "JUMPIFNEQ":
+            $ins->opcode = $operationCode;
+            // Zpracovani labelu.
+            $line = Label($line, $ins);
+            // Zpracovani symbolu.
+            for ($i = 0; $i < 2; $i++) {
+                $symbol = GetOperand($line);
+                $tmpType = WhatType($symbol);
                 array_push($ins->types, $tmpType);
                 array_push($ins->arguments, substr($symbol, strlen($tmpType) + 1));
             }
