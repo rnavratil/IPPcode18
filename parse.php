@@ -1,13 +1,49 @@
 <?php
-function Params($count,$parameters){
-    for($i = 1; $i < $count; $i++){
-        if(($parameters[$i] == "--help") and ($count == 2)){
-            //TODO print napoveda
+function Params($count,$parameters, $flags){
+
+    for($i = 1; $i < $count; $i++) {
+        if (($parameters[$i] == "--help") and ($count == 2)) {
+            echo "pizdec";
             exit(0);
-        }else
-            ErrorOutput(10);
+        }if (preg_match("/^--stats=.+$/", $parameters[$i],$tmp )) {
+            $flags->flagStatp = true;
+            $flags->file = preg_replace("/^--stats=/", "", $parameters[$i]);
+        }if (($parameters[$i] == "--loc")) {
+            $flags->flagLoc = true;
+            $flags->LocOrderArgument = $i;
+        }if (($parameters[$i] == "--comments")) {
+            $flags->flagComment = true;
+            $flags->CommentOrderArgument = $i;
+        } else {
+            echo "pizdec";
+          //  ErrorOutput(10);
+        }
+        /*
+        if (($parameters[$i] == "--help") and ($count == 2)) {
+            echo "pizdec";
+            exit(0);
+        } elseif (preg_match("/^--stats=.+$/", "", $parameters[$i])) {
+            $flags->flagStatp = true;
+            $flags->file = preg_replace("/^--stats=/", "", $parameters[$i]);
+        } elseif (($parameters[$i] == "--loc")) {
+            $flags->flagLoc = true;
+            $flags->LocOrderArgument = $i;
+        } elseif (($parameters[$i] == "--comments")) {
+            $flags->flagComment = true;
+            $flags->CommentOrderArgument = $i;
+        } else {
+            echo "pizdec";
+           ErrorOutput(10);
+        }
+*/
     }
+    // Kontrola pouzitych argumentu.
+    if ($flags->flagLoc and !$flags->flagStatp)
+        ErrorOutput(10);
+    if ($flags->flagComment and !$flags->flagStatp)
+        ErrorOutput(10);
 }
+
 
 function ErrorOutput($number){
     switch ($number){
@@ -32,6 +68,9 @@ function ErrorOutput($number){
         case 10:
             fwrite(STDERR,"Chyba vstupnich parametru.");
             exit(10);
+        case 12:
+            fwrite(STDERR,"Chyba pri praci s vystupnim souborem");
+            exit(12);
     }
 }
 
@@ -163,6 +202,33 @@ function XmlOutput($instructions){
     echo $xml->saveXML();
 }
 
+function Statistics($flags){
+    $content="";
+    if($flags->flagLoc and $flags->flagComment){
+        if($flags->LocOrderArgument < $flags->CommentOrderArgument) {
+            $content = $flags->LocNumber;
+            $content = $content . "\r\n";
+            $content = $content . $flags->CommentNumber;
+        }else{
+            $content = $flags->CommentNumber;
+            $content = $content . "\r\n";
+            $content = $content . $flags->LocNumber;
+        }
+    }elseif($flags->flagLoc){
+        if($flags->LocOrderArgument < $flags->CommentOrderArgument) {
+            $content = $flags->LocNumber;
+        }
+    }elseif($flags->flagComment){
+        if($flags->LocOrderArgument > $flags->CommentOrderArgument) {
+            $content = $flags->CommentNumber;
+        }
+    }
+    $myfile = fopen($flags->file, "w");
+    fwrite($myfile, $content);
+    fclose($myfile);
+
+}
+
 class InstructionClass{
     public $order; // Poradi instrukce.
     public $opcode; // Hodnota operacniho kodu.
@@ -170,32 +236,46 @@ class InstructionClass{
     public $types = array(); // Typy argumentu instrukce.
 }
 
+class FlagClass{
+    public $flagStatp = false;
+    public $flagLoc = false;
+    public $flagComment = false;
+
+    public $LocOrderArgument = 42;
+    public $CommentOrderArgument = 42;
+
+    public $LocNumber = 0;
+    public $CommentNumber = 0;
+    public $file;
+}
+
 // Objekty instrukci.
 $instructions = array();
-
+// Objekt oznacujici pouzite parametry.
+$flags = new FlagClass();
 // Osetreni vstupnich parametru.
-Params($argc, $argv);
+Params($argc, $argv, $flags);
 
 // Nacteni vstupu do pole.
 //$inputFile = explode(PHP_EOL,file_get_contents("php://stdin"));
-$inputFile = array("# adadad","  .IPPcode18"," MOVE GF@mrdky string@p\\345ice<b\\032" ,"  ADD Gf@\$fafe int@3 int@5 #scitani"); //DEBUG
+$inputFile = array("# adadad","  .IPPcode18"," MOVE GF@mrdky string@p\\345ice<b\\032" ,"  ADD Gf@\$fafe int@3 int@5 #scitani", " #scitani "); //DEBUG
 
 // Zpracovani prvniho radku.
 foreach ($inputFile as $line){
     // Odstraneni mezer a tabulatoru na zacatku radku.
     $line = trim($line," \t");
-
     // Odstraneni komentare.
-    $line = preg_replace("/#.*/", "", $line);
-
+    if(strpos($line, "#") !== false) {
+        $flags->CommentNumber++;
+        $line = preg_replace("/#.*/", "", $line);
+    }
     // Nalezeni prvniho radku.
-    if(strtoupper($line) == ".IPPCODE18") {
+    if (strtoupper($line) == ".IPPCODE18") {
         array_shift($inputFile);
         break;
     }
-
     // Odstraneni radku.
-    array_shift($inputFile);
+    array_shift($inputFile); // TODO muzou tam byt bile znaky jeste, pouzit trim.
 }
 
 // Nenalezeno klicove slovo '.IPPCODE18'.
@@ -207,12 +287,13 @@ $index = 1; // Pocitadlo poradi instrukce.
 foreach ($inputFile as $line){
     // Odstraneni mezer a tabulatoru na zacatku radku.
     $line = trim($line," \t");
-
     // Odstraneni komentare.
-    $line = preg_replace("/#.*/", "", $line);
+    if(strpos($line, "#") !== false) {
+        $flags->CommentNumber++;
+        $line = preg_replace("/#.*/", "", $line);
+    }
     if(empty($line)) // Radek obsahoval pouze komentar.
         continue;
-
     // Zpracovani hodnoty operacniho kodu
     preg_match("/^\S*/", $line, $operationCode); // Nalezeni opcode.
     $operationCode = strtoupper(implode($operationCode)); // Prevod na velka pismena.
@@ -224,6 +305,7 @@ foreach ($inputFile as $line){
     // Zpracovani argumentu.
     switch ($operationCode){
         case "MOVE":
+            $flags->LocNumber++;
             $ins->opcode = $operationCode;
             // Zpracovani promenne.
             $line = Variable($line, $ins);
@@ -247,12 +329,14 @@ foreach ($inputFile as $line){
         case "POPFRAME":
         case "RETURN":
         case "BREAK":
+            $flags->LocNumber++;
             $ins->opcode = $operationCode;
             // Test na prebytecne operandy instrukce.
            EndOfOperands($line);
             break;
 
         case "DEFVAR":
+            $flags->LocNumber++;
             $ins->opcode = $operationCode;
             // Zpracovani promenne.
             $line = Variable($line, $ins);
@@ -263,6 +347,7 @@ foreach ($inputFile as $line){
         case "CALL":
         case "LABEL":
         case "JUMP":
+            $flags->LocNumber++;
             $ins->opcode = $operationCode;
             // Zpracovani labelu.
             $line = Label($line, $ins);
@@ -271,6 +356,7 @@ foreach ($inputFile as $line){
             break;
 
         case "PUSHS":
+            $flags->LocNumber++;
             $ins->opcode = $operationCode;
             // Zpracovani symbolu.
             $symbol = GetOperand($line);
@@ -282,6 +368,7 @@ foreach ($inputFile as $line){
             break;
 
         case "POPS":
+            $flags->LocNumber++;
             $ins->opcode = $operationCode;
             // Zpracovani promenne.
             $line = Variable($line, $ins);
@@ -293,6 +380,7 @@ foreach ($inputFile as $line){
         case "SUB":
         case "MUL":
         case "IDIV":
+            $flags->LocNumber++;
             $ins->opcode = $operationCode;
             // Zpracovani promenne.
             $line = Variable($line, $ins);
@@ -312,6 +400,7 @@ foreach ($inputFile as $line){
         case "LT":
         case "GT":
         case "EQ":
+            $flags->LocNumber++;
             $ins->opcode = $operationCode;
             // Zpracovani promenne.
             $line = Variable($line, $ins);
@@ -336,6 +425,7 @@ foreach ($inputFile as $line){
         case "CONCAT":
         case "AND":
         case "OR":
+            $flags->LocNumber++;
             $ins->opcode = $operationCode;
             // Zpracovani promenne.
             $line = Variable($line, $ins);
@@ -354,6 +444,7 @@ foreach ($inputFile as $line){
 
         case "STRLEN":
         case "NOT":
+            $flags->LocNumber++;
             $ins->opcode = $operationCode;
             // Zpracovani promenne.
             $line = Variable($line, $ins);
@@ -369,6 +460,7 @@ foreach ($inputFile as $line){
             break;
 
         case "INT2CHAR":
+            $flags->LocNumber++;
             $ins->opcode = $operationCode;
             // Zpracovani promenne.
             $line = Variable($line, $ins);
@@ -385,6 +477,7 @@ foreach ($inputFile as $line){
 
         case "GETCHAR":
         case "STRI2INT":
+            $flags->LocNumber++;
             $ins->opcode = $operationCode;
             // Zpracovani promenne.
             $line = Variable($line, $ins);
@@ -405,6 +498,7 @@ foreach ($inputFile as $line){
             break;
 
         case "READ":
+            $flags->LocNumber++;
             $ins->opcode = $operationCode;
             // Zpracovani promenne.
             $line = Variable($line, $ins);
@@ -416,6 +510,7 @@ foreach ($inputFile as $line){
             break;
 
         case "SETCHAR":
+            $flags->LocNumber++;
             $ins->opcode = $operationCode;
             // Zpracovani promenne.
             $line = Variable($line, $ins);
@@ -435,6 +530,7 @@ foreach ($inputFile as $line){
             break;
 
         case "TYPE":
+            $flags->LocNumber++;
             $ins->opcode = $operationCode;
             // Zpracovani promenne.
             $line = Variable($line, $ins);
@@ -449,6 +545,7 @@ foreach ($inputFile as $line){
 
         case "JUMPIFEQ":
         case "JUMPIFNEQ":
+            $flags->LocNumber++;
             $ins->opcode = $operationCode;
             // Zpracovani labelu.
             $line = Label($line, $ins);
@@ -465,6 +562,7 @@ foreach ($inputFile as $line){
 
         case "WRITE":
         case "DPRINT":
+            $flags->LocNumber++;
             $ins->opcode = $operationCode;
             // Zpracovani operandu.
             $symbol = GetOperand($line);
@@ -481,5 +579,9 @@ foreach ($inputFile as $line){
     $instructions[] =$ins;
     $index++;
 }
+// Volani funkce pro XML vystup.
 XmlOutput($instructions);
+// Volani funkce pro vystup statistiky.
+if($flags->flagStatp)
+    Statistics($flags);
 return 0;
