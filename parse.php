@@ -16,26 +16,9 @@ function Params($count,$parameters, $flags){
             $flags->CommentOrderArgument = $i;
         } else {
             echo "pizdec";
-          //  ErrorOutput(10);
+            ErrorOutput(10);
         }
-        /*
-        if (($parameters[$i] == "--help") and ($count == 2)) {
-            echo "pizdec";
-            exit(0);
-        } elseif (preg_match("/^--stats=.+$/", "", $parameters[$i])) {
-            $flags->flagStatp = true;
-            $flags->file = preg_replace("/^--stats=/", "", $parameters[$i]);
-        } elseif (($parameters[$i] == "--loc")) {
-            $flags->flagLoc = true;
-            $flags->LocOrderArgument = $i;
-        } elseif (($parameters[$i] == "--comments")) {
-            $flags->flagComment = true;
-            $flags->CommentOrderArgument = $i;
-        } else {
-            echo "pizdec";
-           ErrorOutput(10);
-        }
-*/
+
     }
     // Kontrola pouzitych argumentu.
     if ($flags->flagLoc and !$flags->flagStatp)
@@ -43,7 +26,6 @@ function Params($count,$parameters, $flags){
     if ($flags->flagComment and !$flags->flagStatp)
         ErrorOutput(10);
 }
-
 
 function ErrorOutput($number){
     switch ($number){
@@ -257,8 +239,8 @@ $flags = new FlagClass();
 Params($argc, $argv, $flags);
 
 // Nacteni vstupu do pole.
-//$inputFile = explode(PHP_EOL,file_get_contents("php://stdin"));
-$inputFile = array("# adadad","  .IPPcode18"," MOVE GF@mrdky string@p\\345ice<b\\032" ,"  ADD Gf@\$fafe int@3 int@5 #scitani", " #scitani "); //DEBUG
+$inputFile = explode(PHP_EOL,file_get_contents("php://stdin"));
+//$inputFile = array("# adadad","  .IPPcode18","MOVE LF@par GF@par" ); //DEBUG
 
 // Zpracovani prvniho radku.
 foreach ($inputFile as $line){
@@ -312,8 +294,7 @@ foreach ($inputFile as $line){
             // Zpracovani symbolu.
             $symbol = GetOperand($line);
             if (IsVariable($symbol)) {
-                $line = Variable($line, $ins); // Zpracuj promennou.
-                array_push($ins->arguments, $symbol);
+                $line = Variable($symbol, $ins); // Zpracuj promennou.
             }
             else { // Zjisti typ operandu.
                 $tmpType = WhatType($symbol);
