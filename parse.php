@@ -227,20 +227,24 @@ function Statistics($flags){
     if($flags->flagLoc and $flags->flagComment){
         if($flags->LocOrderArgument < $flags->CommentOrderArgument) {
             $content = $flags->LocNumber;
-            $content = $content . "\r\n";
+            $content = $content . "\n";
             $content = $content . $flags->CommentNumber;
+            $content = $content . "\n";
         }else{
             $content = $flags->CommentNumber;
-            $content = $content . "\r\n";
+            $content = $content . "\n";
             $content = $content . $flags->LocNumber;
+            $content = $content . "\n";
         }
     }elseif($flags->flagLoc){
         if($flags->LocOrderArgument < $flags->CommentOrderArgument) {
             $content = $flags->LocNumber;
+            $content = $content . "\n";
         }
     }elseif($flags->flagComment){
         if($flags->LocOrderArgument > $flags->CommentOrderArgument) {
             $content = $flags->CommentNumber;
+            $content = $content . "\n";
         }
     }
     $myfile = fopen($flags->file, "w") or ErrorOutput(12);
