@@ -3,14 +3,21 @@ function Params($count,$parameters, $flags){
 
     for($i = 1; $i < $count; $i++) {
         if (($parameters[$i] == "--help") and ($count == 2)) {
+            HelpPrint();
             exit(0);
-        }if (preg_match("/^--stats=.+$/", $parameters[$i],$tmp )) {
+        }elseif (preg_match("/^--stats=.+$/", $parameters[$i],$tmp )) {
+            if($flags->flagStatp) // Osetreni duplicity zadaneho parametru.
+                ErrorOutput(10);
             $flags->flagStatp = true;
             $flags->file = preg_replace("/^--stats=/", "", $parameters[$i]);
-        }if (($parameters[$i] == "--loc")) {
+        }elseif (($parameters[$i] == "--loc")) {
+            if($flags->flagLoc) // Osetreni duplicity zadaneho parametru.
+                ErrorOutput(10);
             $flags->flagLoc = true;
             $flags->LocOrderArgument = $i;
-        }if (($parameters[$i] == "--comments")) {
+        }elseif (($parameters[$i] == "--comments")) {
+            if($flags->flagComment) // Osetreni duplicity zadaneho parametru.
+                ErrorOutput(10);
             $flags->flagComment = true;
             $flags->CommentOrderArgument = $i;
         } else {
@@ -23,6 +30,24 @@ function Params($count,$parameters, $flags){
         ErrorOutput(10);
     if ($flags->flagComment and !$flags->flagStatp)
         ErrorOutput(10);
+}
+
+function HelpPrint(){
+    echo "Projekt do predmetu IPP. Vytvoril Rostislav Navratil v roce 2018.\n\n";
+    echo "Skript typu filtr 'parse.php'napsany v jazyce PHP 5.6 nacte ze standardniho vstupu zdrojovy kod v IPPcode18";
+    echo ", zkontroluje lexikalni a syntaktickou spravnost kodu a vypise na standardni vystup XML reprezentaci";
+    echo " programu\n";
+    echo "\nZakladni parametry bez rozsireni:\n";
+    echo " --help  - vypise napovedu. Nelze ho kombinovat s jinymi parametry.\n";
+    echo "\nChybove navratove kody specifické pro analyzátor:\n";
+    echo "21 - lexikalni nebo syntakticka chyba zdrojoveho kodu zapsaneho v IPPcode18\n";
+    echo "10 - nespravne pouzite parametry.\n";
+    echo "12 - chyba pri manipulaci z vystupnim souborem\n";
+    echo "\nRozsireni STATP:\n";
+    echo "poradi parametru --loc a --coments ovlivnuje poradi vypisu hodnot do souboru.\n\n";
+    echo "--stats=\<file\>  -  povinny parametr. \<file\> znaci cestu k souboru.\n";
+    echo "--loc - volitelny parametr. Vypise do zvoleneho souboru \<file\> pocet instrukci.\n";
+    echo "--comments - volitelny parametr. Vypise do souboru \<file\> komentaru za uvodnim kodem '.IPPcode18'.\n";
 }
 
 function ErrorOutput($number){
@@ -54,45 +79,60 @@ function ErrorOutput($number){
     }
 }
 
-/*  IsVariable: funkce na kontrolu formatu promenne.
- *  Vstupni hodnota: Textovy retezec.
- *  return :
- *      1 - Jedna se o promennou.
- *      0 - Nejedna se o promennou.
- * */
+/** Funkce overuje zda ma promenna spravny format.
+ * @param $variable - promenna na overeni.
+ * @return int - '0' nejedna se o promennou. '1' jedna se o promennou.
+ */
 function IsVariable($variable){
-    if(!preg_match("/^(LF|lf|lF|Lf|GF|gf|gF|Gf|TF|tf|Tf|tF)@([a-zA-Z\_$\-\&\%\*]+)$/", $variable,$tmp ))
-        return 0; //ErrorOutput(5);
-    //$variable = strtoupper( substr( $variable, 0, 2 ) ).substr( $variable, 2 );
-    return 1; //return $variable;
+    if(!preg_match("/^(LF|GF|TF)@([a-zA-Z\_$\-\&\%\*]+)$/", $variable,$tmp ))
+        return 0;
+        //https://wis.fit.vutbr.cz/FIT/st/phorum-msg-show.php?id=50260
+    //if(!preg_match("/^(LF|lf|lF|Lf|GF|gf|gF|Gf|TF|tf|Tf|tF)@([a-zA-Z\_$\-\&\%\*]+)$/", $variable,$tmp ))
+
+    return 1;
 }
 
+/** Funkce pro zpracovani navesti.
+ * @param $line - radek s operandy.
+ * @param $ins - objekt pro aktualni instrukci.
+ * @return mixed - vraci zbytek radku.
+ */
 function Label($line, $ins){
-    $label = GetOperand($line);
+    $label = GetOperand($line); // Z radku vybere prvni operand.
     if(!preg_match("/^([a-zA-Z\_$\-\&\%\*]+)$/", $label,$tmp ))
         ErrorOutput(5);
-    array_push($ins->arguments, $label);
-    array_push($ins->types, "label");
+    $label = htmlentities($label); // Prevod problematickych znaku na entity.
+    array_push($ins->arguments, $label); // Vlozeni hodnoty promenne do objektu.
+    array_push($ins->types, "label"); // Vlozeni typu promenne do objektu.
     return $line;
 }
 
+/** Funkce pro zpracovani promenne.
+ * @param $line - radek s operandy.
+ * @param $ins - objekt pro aktualni instrukci.
+ * @return mixed - vraci zbytek radku.
+ */
 function Variable($line, $ins){
-    $variable = GetOperand($line);
-    //$variable = IsVariable($variable); // Validace promenne.
-    if (!isVariable($variable))
+    $variable = GetOperand($line); // Z radku vybere prvni operand.
+    if (!isVariable($variable)) // Overeni zda se jedna o promennou.
         ErrorOutput(5);
     $variable = strtoupper( substr( $variable, 0, 2 ) ).substr( $variable, 2 );
-    array_push($ins->arguments, $variable);
-    array_push($ins->types, "var");
+    $variable = htmlentities($variable); // Prevod problematickych znaku na entity.
+    array_push($ins->arguments, $variable); // Vlozeni hodnoty promenne do objektu.
+    array_push($ins->types, "var"); // Vlozeni typu promenne do objektu.
     return $line;
 }
 
+/** Funkce pro nalezeni prvniho operandu z radku.
+ * @param $line - radek s operandy.
+ * @return string - nalezeny operand.
+ */
 function GetOperand(&$line){
-    $line = trim($line," \t"); //
-    if(empty($line)) // Test na maly pocet argumentu instrukce.
+    $line = trim($line," \t"); // Odstraneni mezer a tabulatoru pred operandem.
+    if(empty($line)) // Test na maly pocet operandu instrukce.
         ErrorOutput(4);
-    preg_match("/^\S*/", $line, $operand);
-    $line = preg_replace("/^\S*/", "", $line);
+    preg_match("/^\S*/", $line, $operand); // Nalezeni operandu.
+    $line = preg_replace("/^\S*/", "", $line); // Vyjmuti operandu z radku.
     return implode($operand);
 }
 
@@ -157,7 +197,7 @@ function StringChecker($operand){
  *
  */
 function XmlOutput($instructions){
-    $xml = new DOMDocument('1.0');
+    $xml = new DOMDocument('1.0',"UTF-8");
     $xml->formatOutput = true;
     $program=$xml->createElement("program");
     $program->setAttribute("language", "IPPcode18");
@@ -237,8 +277,8 @@ $flags = new FlagClass();
 Params($argc, $argv, $flags);
 
 // Nacteni vstupu do pole.
-$inputFile = explode(PHP_EOL,file_get_contents("php://stdin"));
-//$inputFile = array("MOVE s ","  .IPPcode18","CONCAT GF@par GF@lar GF@pars #cpmca" ); //DEBUG
+//$inputFile = explode(PHP_EOL,file_get_contents("php://stdin"));
+$inputFile = array("#MOVE s ","  .IPPcode18","move GF@fd string@3\99934" ); //DEBUG
 
 // Zpracovani prvniho radku.
 foreach ($inputFile as $line){
@@ -246,7 +286,7 @@ foreach ($inputFile as $line){
     $line = trim($line," \t");
     // Odstraneni komentare.
     if(strpos($line, "#") !== false) {
-        $flags->CommentNumber++;
+        //$flags->CommentNumber++; Pro rozsireni statp se budou pocitat pouze komentare ze '.IPPcode18'.
         $line = preg_replace("/#.*/", "", $line);
     }
     // Nalezeni prvniho radku.
@@ -254,6 +294,9 @@ foreach ($inputFile as $line){
         array_shift($inputFile);
         break;
     }
+    // Pokud je pred .IPPCODE18 nebily znak.
+    if(!empty($line))
+        ErrorOutput(21);
     // Odstraneni radku.
     array_shift($inputFile);
 }
@@ -352,25 +395,7 @@ foreach ($inputFile as $line){
 
         case "PUSHS":
         case "WRITE":
-        case "DPRINT":/*
-            $flags->LocNumber++; // Rozsireni statp.
-            // Ulozeni operacniho kodu.
-            $ins->opcode = $operationCode;
-            // Zpracovani symbolu.
-            $symbol = GetOperand($line);
-            $tmpType = WhatType($symbol);
-            array_push($ins->types, $tmpType);
-            if($tmpType == "string"){ // Prevod na HTML entity.
-                $symbol = substr($symbol, strlen($tmpType) + 1);
-                $symbol = htmlentities($symbol);
-                array_push($ins->arguments, $symbol);
-            } else {
-                array_push($ins->arguments, substr($symbol, strlen($tmpType) + 1));
-            }
-            // Test na prebytecne operandy instrukce.
-            EndOfOperands($line);
-            break;
-    */
+        case "DPRINT":
         $flags->LocNumber++; // Rozsireni statp.
         // Ulozeni operacniho kodu.
         $ins->opcode = $operationCode;
@@ -394,16 +419,7 @@ foreach ($inputFile as $line){
         // Test na prebytecne operandy instrukce.
         EndOfOperands($line);
         break;
-/*
-        case "POPS":
-            $flags->LocNumber++;
-            $ins->opcode = $operationCode;
-            // Zpracovani promenne.
-            $line = Variable($line, $ins);
-            // Test na prebytecne operandy instrukce.
-            EndOfOperands($line);
-            break;
-*/
+
         case "ADD":
         case "SUB":
         case "MUL":
@@ -444,160 +460,7 @@ foreach ($inputFile as $line){
             // Test na prebytecne operandy instrukce.
             EndOfOperands($line);
             break;
-/*
 
- *
-        case "LT":
-        case "GT":
-        case "EQ":
-            $flags->LocNumber++;
-            $ins->opcode = $operationCode;
-            // Zpracovani promenne.
-            $line = Variable($line, $ins);
-            // Zpracovani prvniho symbolu.
-            $symbol = GetOperand($line);
-            $tmpType = WhatType($symbol);
-            // Zpracovani druheho symbolu.
-            $symbol2 = GetOperand($line);
-            $tmpType2 = WhatType($symbol2);
-            // Kontrola typu.
-            if($tmpType != $tmpType2)
-                ErrorOutput(3);
-            // Zapis do objektu.
-            array_push($ins->types, $tmpType);
-            if($tmpType == "string"){ // HTML entites.
-                $symbol = substr($symbol, strlen($tmpType) + 1);
-                $symbol = htmlentities($symbol);
-                array_push($ins->arguments, $symbol);
-            }else {
-                array_push($ins->arguments, substr($symbol, strlen($tmpType) + 1));
-            }
-            array_push($ins->types, $tmpType2);
-            if($tmpType2 == "string"){ // HTML entites.
-                $symbol2 = substr($symbol2, strlen($tmpType) + 1);
-                $symbol2 = htmlentities($symbol2);
-                array_push($ins->arguments, $symbol2);
-            }else {
-                array_push($ins->arguments, substr($symbol2, strlen($tmpType2) + 1));
-            }
-            // Test na prebytecne operandy instrukce.
-            EndOfOperands($line);
-            break;
-
-        case "CONCAT":
-            $flags->LocNumber++;
-            $ins->opcode = $operationCode;
-            // Zpracovani promenne.
-            $line = Variable($line, $ins);
-            // Zpracovani prvniho symbolu.
-            for ($i = 0; $i < 2; $i++) {
-                $symbol = GetOperand($line);
-                $tmpType = WhatType($symbol);
-                if ($tmpType != "string")
-                    ErrorOutput(3);
-                array_push($ins->types, $tmpType);
-                $symbol = substr($symbol, strlen($tmpType) + 1);
-                $symbol = htmlentities($symbol);
-                array_push($ins->arguments, $symbol);
-            }
-            // Test na prebytecne operandy instrukce.
-            EndOfOperands($line);
-            break;
-
-        case "AND":
-        case "OR":
-            $flags->LocNumber++;
-            $ins->opcode = $operationCode;
-            // Zpracovani promenne.
-            $line = Variable($line, $ins);
-            // Zpracovani prvniho symbolu.
-            for ($i = 0; $i < 2; $i++) {
-                $symbol = GetOperand($line);
-                $tmpType = WhatType($symbol);
-                if ($tmpType != "bool")
-                    ErrorOutput(3);
-                array_push($ins->types, $tmpType);
-                array_push($ins->arguments, substr($symbol, strlen($tmpType) + 1));
-            }
-            // Test na prebytecne operandy instrukce.
-            EndOfOperands($line);
-            break;
-*/
-/*
-        case "STRLEN":
-            $flags->LocNumber++;
-            $ins->opcode = $operationCode;
-            // Zpracovani promenne.
-            $line = Variable($line, $ins);
-            // Zpracovani symbolu.
-            $symbol = GetOperand($line);
-            $tmpType = WhatType($symbol);
-            if ($tmpType != "string")
-                ErrorOutput(3);
-            array_push($ins->types, $tmpType);
-            $symbol = substr($symbol, strlen($tmpType) + 1);
-            $symbol = htmlentities($symbol);
-            array_push($ins->arguments, $symbol);
-            // Test na prebytecne operandy instrukce.
-            EndOfOperands($line);
-            break;
-*/
-/*
-        case "NOT":
-            $flags->LocNumber++;
-            $ins->opcode = $operationCode;
-            // Zpracovani promenne.
-            $line = Variable($line, $ins);
-            // Zpracovani symbolu.
-            $symbol = GetOperand($line);
-            $tmpType = WhatType($symbol);
-            if ($tmpType != "bool")
-                ErrorOutput(3);
-            array_push($ins->types, $tmpType);
-            array_push($ins->arguments, substr($symbol, strlen($tmpType) + 1));
-            // Test na prebytecne operandy instrukce.
-            EndOfOperands($line);
-            break;
-
-        case "INT2CHAR":
-            $flags->LocNumber++;
-            $ins->opcode = $operationCode;
-            // Zpracovani promenne.
-            $line = Variable($line, $ins);
-            // Zpracovani prvniho symbolu.
-            $symbol = GetOperand($line);
-            $tmpType = WhatType($symbol);
-            if(!is_int($symbol))
-                ErrorOutput(3);
-            array_push($ins->types, $tmpType);
-            array_push($ins->arguments, substr($symbol, strlen($tmpType) + 1));
-            // Test na prebytecne operandy instrukce.
-            EndOfOperands($line);
-            break;
-*/
-/*
-        case "GETCHAR":
-        case "STRI2INT":
-            $flags->LocNumber++;
-            $ins->opcode = $operationCode;
-            // Zpracovani promenne.
-            $line = Variable($line, $ins);
-            // Zpracovani symbolu.
-            for ($i = 0; $i < 2; $i++) {
-                $symbol = GetOperand($line);
-                $tmpType = WhatType($symbol);
-                if ($i == 0 and $tmpType != "string")
-                    ErrorOutput(3);
-                elseif ($tmpType != "int")
-                    ErrorOutput(3);
-
-                array_push($ins->types, $tmpType);
-                array_push($ins->arguments, substr($symbol, strlen($tmpType) + 1));
-            }
-            // Test na prebytecne operandy instrukce.
-            EndOfOperands($line);
-            break;
-*/
         case "READ":
             $flags->LocNumber++; // Rozsireni statp.
             // Ulozeni operacniho kodu.
@@ -613,48 +476,7 @@ foreach ($inputFile as $line){
             // Test na prebytecne operandy instrukce.
             EndOfOperands($line);
             break;
-/*
-        case "SETCHAR":
-            $flags->LocNumber++;
-            $ins->opcode = $operationCode;
-            // Zpracovani promenne.
-            $line = Variable($line, $ins);
-            // Zpracovani symbolu.
-            for ($i = 0; $i < 2; $i++) {
-                $symbol = GetOperand($line);
-                $tmpType = WhatType($symbol);
-                if ($i == 0 and $tmpType != "int") // TODO nemuzou byt zaporna cisla
-                    ErrorOutput(3);
-                elseif ($tmpType != "string")
-                    ErrorOutput(3);
-                array_push($ins->types, $tmpType);
-                if($tmpType == "string"){
-                    $symbol = substr($symbol, strlen($tmpType) + 1);
-                    $symbol = htmlentities($symbol);
-                    array_push($ins->arguments, $symbol);
-                }else {
-                    array_push($ins->arguments, substr($symbol, strlen($tmpType) + 1));
-                }
-            }
-            // Test na prebytecne operandy instrukce.
-            EndOfOperands($line);
-            break;
-*/
-            /*
-        case "TYPE":
-            $flags->LocNumber++;
-            $ins->opcode = $operationCode;
-            // Zpracovani promenne.
-            $line = Variable($line, $ins);
-            // Zpracovani symbolu.
-            $symbol = GetOperand($line);
-            $tmpType = WhatType($symbol);
-            array_push($ins->types, $tmpType);
-            array_push($ins->arguments, substr($symbol, strlen($tmpType) + 1));
-            // Test na prebytecne operandy instrukce.
-            EndOfOperands($line);
-            break;
-*/
+
         case "JUMPIFEQ":
         case "JUMPIFNEQ":
             $flags->LocNumber++; // Rozsireni statp.
@@ -684,19 +506,7 @@ foreach ($inputFile as $line){
             // Test na prebytecne operandy instrukce.
             EndOfOperands($line);
             break;
-        /*
-        case "WRITE":
-        case "DPRINT":
-            $flags->LocNumber++;
-            $ins->opcode = $operationCode;
-            // Zpracovani operandu.
-            $symbol = GetOperand($line);
-            $tmpType = WhatType($symbol);
-            array_push($ins->types, $tmpType);
-            // Test na prebytecne operandy instrukce.
-            EndOfOperands($line);
-            break;
-*/
+
         default:
             ErrorOutput(2);
     }
