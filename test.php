@@ -1,10 +1,10 @@
 <?php
 
 /**
- * Class ParameterFlags
+ * Class ParameterFlagsClass
  * Trida pouzitych parametru skriptu.
  */
-class ParameterFlags{
+class ParameterFlagsClass{
     public $flagRecursive = false; // Testy se budou hledat rekurzivne ve vsech podadresarich.
     public $flagDirectory = false; // Testy se budou hledat v zadanem adresari.
     public $flagParse = false; // Soubor se skriptem parseru.
@@ -14,17 +14,21 @@ class ParameterFlags{
     public $Parse; // Soubor se skriptem parseru.
     public $Interpret; // Soubor se skriptem interpretu.
 }
-// Objekt obsahuje pouzite parametry skriptu.
-$flags = new ParameterFlags();
+$flags = new ParameterFlagsClass(); // Objekt obsahuje pouzite parametry skriptu.
 
-class ReferenceTests{
-    public $in; // Vstup pro interpret v jazyce XML.
+/**
+ * Class ReferenceTestsClass
+ * Troda obsahuje veschny soubory jednoho testu.
+ */
+class ReferenceTestsClass{
+    public $in; // Stdin pro interpret v jazyce XML.
     public $out; // Vystup z interpretu.
     public $src; // Zdrojovy kod v jazyce IPPcode18.
     public $rc; // Prvni navratovy kod.
-}
 
-$refTest = new ReferenceTests();
+    public $parseOutput; // Stdout z 'parse.php'.
+    public $parseReturnCode; // Navratova hodnota z 'parse.php'.
+}
 
 /** Funkce na zpracovani parametru skriptu.
  * @param $count - argc. Pocet parametru skriptu.
@@ -41,7 +45,10 @@ function Params($count,$parameters,$flag){
 
         }elseif (preg_match("/^--directory=.+$/", $parameters[$i],$tmp ) and !($flag->flagDirectory)) {
             $flag->flagDirectory =  true;
-            $flag->Directory = substr( $parameters[$i], 12 ); // Cesta k souboru.
+            $correctFolder = substr( $parameters[$i], 12 ); // Cesta k souboru. TODO more na konci musi byt /
+            if(substr($correctFolder,-1) != "/")
+                $correctFolder = $correctFolder."/";
+            $flag->Directory = $correctFolder;
 
         }elseif (preg_match("/^--parse-script=.+$/", $parameters[$i],$tmp ) and !($flag->flagParse)) {
             $flag->flagParse = true;
@@ -60,8 +67,11 @@ function Params($count,$parameters,$flag){
         $flag->Parse = "parse.php";
     if(!$flag->flagInterpret)
         $flag->Interpret = "interpret.py";
-    if(!$flag->flagDirectory)
-        $flag->Directory = "."; //TODO pwd
+    if(!$flag->flagDirectory) {
+        $actualFolder = shell_exec('pwd');
+        $actualFolder = substr($actualFolder, 0,-1)."/";
+        $flag->Directory = $actualFolder;
+    }
 
 }
 
@@ -77,6 +87,10 @@ function ErrorOutput($number){
         case 10: // Chyba vstupnich parametru.
             fwrite(STDERR,"10"); // TODO
             exit(10);
+
+        case 12: // Chyba vstupnich parametru.
+            fwrite(STDERR,"10"); // TODO
+            exit(12);
     }
 }
 
@@ -95,7 +109,7 @@ function SourcesFile($flags){
             }
         }
 
-    }else{ // Testy se budou hledat v dane slozce slozce.
+    }else{ // Testy se budou hledat v dane slozce.
         $testDirectory = scandir($flags->Directory);
         foreach ($testDirectory as $info) { // Trideni souboru v adresari.
             if(preg_match("/.src$/", $info, $tmp)) {
@@ -109,57 +123,67 @@ function SourcesFile($flags){
 /** Funkce vygeneruje chybejici soubory.
  * @param $sources - '.src' soubory testu.
  * @param $flags - objekt se zvolenymi parametry skriptu.
+ * @return array - $referenceTest. Pole testu.
  */
 function GenerateMissingFiles($sources, $flags){
-    if(!$flags->flagRecursive){
-        foreach ($sources as $src) {
-            // Generovani '.in' souboru.
-            $inFile = substr($src, 0, -3) . "in"; //  Zjisteni nazvu souboru '.in'.
-            if (!file_exists($flags->Directory.$inFile)) { // Vytvoreni souboru, pokud neexistuje.
-                $myfile = fopen($flags->Directory.$inFile, "w") or exit(12);
-                fwrite($myfile, '');
-                fclose($myfile);
-            }
-            // Generovani '.out' souboru.
-            $outFile = substr($src, 0, -3) . "out"; //  Zjisteni nazvu souboru '.out'.
-            if (!file_exists($flags->Directory.$outFile)) { // Vytvoreni souboru, pokud neexistuje.
-                $myfile = fopen($flags->Directory.$outFile, "w") or exit(12);
-                fwrite($myfile, '');
-                fclose($myfile);
-            }
-            // Generovani '.rc' souboru.
-            $rcFile = substr($src, 0, -3) . "rc"; //  Zjisteni nazvu souboru '.out'.
-            if (!file_exists($flags->Directory.$rcFile)) { // Vytvoreni souboru, pokud neexistuje.
-                $myfile = fopen($flags->Directory.$rcFile, "w") or exit(12);
-                fwrite($myfile, '0');
-                fclose($myfile);
-            }
+    $referenceTests = array(); // Pole referencnich testu.
+
+    foreach ($sources as $src) {
+        // Zjisteni nazvu ostatnich souboru testu.
+        if($flags->flagRecursive) { // Rekurzivni hledani v adresarich.
+            $srcFile = $src;
+            $inFile = substr($src, 0, -3) . "in";
+            $outFile = substr($src, 0, -3) . "out";
+            $rcFile = substr($src, 0, -3) . "rc";
+        }else {
+            $srcFile = $flags->Directory . $src;
+            $inFile = $flags->Directory . substr($src, 0, -3) . "in";
+            $outFile = $flags->Directory . substr($src, 0, -3) . "out";
+            $rcFile = $flags->Directory . substr($src, 0, -3) . "rc";
         }
-    }else {
-        foreach ($sources as $src) {
-            // Generovani '.in' souboru.
-            $inFile = substr($src, 0, -3) . "in"; //  Zjisteni nazvu souboru '.in'.
-            if (!file_exists($inFile)) { // Vytvoreni souboru, pokud neexistuje.
-                $myfile = fopen($inFile, "w") or exit(12);
-                fwrite($myfile, '');
-                fclose($myfile);
-            }
-            // Generovani '.out' souboru.
-            $outFile = substr($src, 0, -3) . "out"; //  Zjisteni nazvu souboru '.out'.
-            if (!file_exists($outFile)) { // Vytvoreni souboru, pokud neexistuje.
-                $myfile = fopen($outFile, "w") or exit(12);
-                fwrite($myfile, '');
-                fclose($myfile);
-            }
-            // Generovani '.rc' souboru.
-            $rcFile = substr($src, 0, -3) . "rc"; //  Zjisteni nazvu souboru '.out'.
-            if (!file_exists($rcFile)) { // Vytvoreni souboru, pokud neexistuje.
-                $myfile = fopen($rcFile, "w") or exit(12);
-                fwrite($myfile, '0');
-                fclose($myfile);
-            }
+        // Ukladani vsech souboru daneho testu do objektu.
+        $refTest = new ReferenceTestsClass(); // Objekt obsahuje soubory testu.
+        $refTest->src = $srcFile;
+        $refTest->in = $inFile;
+        $refTest->out = $outFile;
+        $refTest->rc = $rcFile;
+
+        // Generovani '.in' souboru.
+        if (!file_exists($inFile)) { // Vytvoreni souboru, pokud neexistuje.
+            $myfile = fopen($inFile, "w") or exit(12);
+            fwrite($myfile, '');
+            fclose($myfile);
         }
+        // Generovani '.out' souboru.
+        if (!file_exists($outFile)) { // Vytvoreni souboru, pokud neexistuje.
+            $myfile = fopen($outFile, "w") or exit(12);
+            fwrite($myfile, '');
+            fclose($myfile);
+        }
+        // Generovani '.rc' souboru.
+        if (!file_exists($rcFile)) { // Vytvoreni souboru, pokud neexistuje.
+            $myfile = fopen($rcFile, "w") or exit(12);
+            fwrite($myfile, '0');
+            fclose($myfile);
+        }
+        array_push($referenceTests,$refTest); // Vlozeni objektu do pole objektu testu.
     }
+    return $referenceTests;
+}
+
+function ParseProcess($referenceTests, $flags){
+    foreach ($referenceTests as $test){
+        //TODO Odkud mam pustit skript.aktualni adresar
+
+        exec('php5.6 parse.php < '.$test->src, $tmp, $parseExitCode);
+        //TODO tohle se udela jen pokud vystup z parse.php je 0
+        if($parseExitCode == 0)
+            $parseOutput = shell_exec('php5.6 parse.php < ' . $test->src); // Vystup z parse.php.
+
+    }
+
+
+
 }
 
 /**
@@ -185,7 +209,9 @@ Params($argc,$argv,$flags);
 // Zpracovani zdrojovych souboru z prislusnych adresaru.
 $sources = SourcesFile($flags);
 // Generovani chybejicich souboru testu.
-GenerateMissingFiles($sources, $flags);
+$referenceTests = GenerateMissingFiles($sources, $flags);
+// Zpracovani skriptu 'parse.php'.
+ParseProcess($referenceTests, $flags);
 
 //TODO nacteni testu
 //TODO nacteni parse.php se vstupem .src
