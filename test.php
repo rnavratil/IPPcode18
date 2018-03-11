@@ -28,6 +28,8 @@ class ReferenceTestsClass{
 
     public $parseOutput; // Stdout z 'parse.php'.
     public $parseReturnCode; // Navratova hodnota z 'parse.php'.
+    public $interpretOutput; // Stdout z 'interpret.py'.
+    public $interpretReturnCode; // Navratova hodnota z 'intrpret.py'.
 }
 
 /** Funkce na zpracovani parametru skriptu.
@@ -85,11 +87,11 @@ function ErrorOutput($number){
             exit(21);
 
         case 10: // Chyba vstupnich parametru.
-            fwrite(STDERR,"10"); // TODO
+            fwrite(STDERR,"Chyba"); // TODO
             exit(10);
 
         case 12: // Chyba vstupnich parametru.
-            fwrite(STDERR,"10"); // TODO
+            fwrite(STDERR,"12"); // TODO
             exit(12);
     }
 }
@@ -171,19 +173,56 @@ function GenerateMissingFiles($sources, $flags){
     return $referenceTests;
 }
 
+/** Funkce testuje soubor 'parse.php'.
+ * @param $referenceTests - pole objektu referencnich testu.
+ * @param $flags - objekt se zvolenymi parametry skriptu.
+ */
 function ParseProcess($referenceTests, $flags){
     foreach ($referenceTests as $test){
-        //TODO Odkud mam pustit skript.aktualni adresar
+        // Zjisteni navratove hodnoty testu z parse.php.
+        exec('php5.6 ' . $flags->Parse . ' < '.$test->src, $tmp, $parseExitCode);
+        $test->parseReturnCode =$parseExitCode; // Ulozeni hodnoty do objektu.
 
-        exec('php5.6 parse.php < '.$test->src, $tmp, $parseExitCode);
-        //TODO tohle se udela jen pokud vystup z parse.php je 0
-        if($parseExitCode == 0)
-            $parseOutput = shell_exec('php5.6 parse.php < ' . $test->src); // Vystup z parse.php.
-
+        if($parseExitCode == 0) {
+            $test->parseOutput = shell_exec('php5.6 ' . $flags->Parse . ' < ' . $test->src); // Vystup z parse.php.
+        }
+        /*else{
+            $referenceReturnCode = file_get_contents($test->rc, FILE_USE_INCLUDE_PATH);
+            if($referenceReturnCode === false)
+                ErrorOutput(12);
+            continue;
+        }*/
     }
+}
 
 
+function InterpretProcess($referenceTests, $flags){
+    foreach ($referenceTests as $test){
+        if($test->parseReturnCode != "0") // Preskoci testy, ktere se nedostali za 'parse.php'.
+            continue;
+        // Vytvoreni jedinecneho nazvu pro docasny soubor.
+        $filename = './TMPFILEaqapoldea';
+        while(file_exists($filename)){
+           $filename = $filename . "x";
+       }
+        // Vytvoreni docasneho souboru.
+        $myfile = fopen($filename, "w") or die("Unable to open file!");
+        fwrite($myfile, $test->parseOutput);
+        fclose($myfile);
+        // Zjisteni navratove hodnoty z python.py
+        exec('python3.6 '.$flags->Interpret.' --source='.$filename.' < '.$test->in, $tmp, $interpretExitCode) or ErrorOutput(10);
+        $test->parseReturnCode =$interpretExitCode; // Ulozeni navratove hodnoty z interpret.py.
+        // Zpracovani vystupu z interpret.py.
+        if($interpretExitCode == 0) {
+            $test->interpretOutput = shell_exec('python3.6 ' . $flags->Interpret . ' --source=' . $filename . ' < ' . $test->in);
+        }
+        // Mazani docasneho souboru.
+        unlink($filename);
+    }
+}
 
+function HTMLgenerate($referenceTests){
+    //TODO htmlentitues
 }
 
 /**
@@ -212,18 +251,10 @@ $sources = SourcesFile($flags);
 $referenceTests = GenerateMissingFiles($sources, $flags);
 // Zpracovani skriptu 'parse.php'.
 ParseProcess($referenceTests, $flags);
-
-//TODO nacteni testu
-//TODO nacteni parse.php se vstupem .src
-//TODO porovnani navratove hodnoty parse.php a .rc
-//TODO ulozeni vysledku
-
-//TODO nacteni interpret.py se vysledkem parse.php a in seslu na stdins
-//TODO porovnani .out a vysledku z interpret.py
-//TODO ulozeni vysledku
-
-//TODO generovani HTML.
-
+// Zpracovani skriptu 'interpret.py'.
+InterpretProcess($referenceTests, $flags);
+// Generovani HTML5 vystupu.
+HTMLgenerate($referenceTests);
 
 echo "Moskva";
 return 0;
