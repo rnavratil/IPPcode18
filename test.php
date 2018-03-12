@@ -180,6 +180,7 @@ function GenerateMissingFiles($sources, $flags){
 function ParseProcess($referenceTests, $flags){
     foreach ($referenceTests as $test){
         // Zjisteni navratove hodnoty testu z parse.php.
+        $parseExitCode = 44;
         exec('php5.6 ' . $flags->Parse . ' < '.$test->src, $tmp, $parseExitCode);
         $test->parseReturnCode =$parseExitCode; // Ulozeni hodnoty do objektu.
 
@@ -210,7 +211,8 @@ function InterpretProcess($referenceTests, $flags){
         fwrite($myfile, $test->parseOutput);
         fclose($myfile);
         // Zjisteni navratove hodnoty z python.py
-        exec('python3.6 '.$flags->Interpret.' --source='.$filename.' < '.$test->in, $tmp, $interpretExitCode) or ErrorOutput(10);
+        //exec ('python3.6 interpret.py', $tmp, $interpretExitCode);
+        exec('python3.6 '.$flags->Interpret.' --source='.$filename.' < '.$test->in, $tmp, $interpretExitCode);
         $test->parseReturnCode =$interpretExitCode; // Ulozeni navratove hodnoty z interpret.py.
         // Zpracovani vystupu z interpret.py.
         if($interpretExitCode == 0) {
@@ -221,8 +223,80 @@ function InterpretProcess($referenceTests, $flags){
     }
 }
 
-function HTMLgenerate($referenceTests){
-    //TODO htmlentitues
+function TestSort($referenceTests, &$succesTests, &$failedTests){
+    // Sablona pro HTML tagy tabulky.
+    $trStart = "<tr".">\n";
+    $tdStart = "<td".">";
+    $tdEnd = "</td".">\n";
+    $trEnd = "</tr".">\n";
+    // Pole roztrizenych testu.
+    $failedTests = array();
+    $succesTests = array();
+
+    // Proces vyhodnoceni a trideni testu.
+    foreach ($referenceTests as $test){
+        $htmlTest = $trStart; // Promenna pro radek tabulky.
+        $htmlTest = $htmlTest. $tdStart.substr($test->src,0,-4).$tdEnd; // Pole Identification.
+
+        if($test->parseReturnCode != 0){ // Navratova hodnota z parse.php neni roven nule.
+            $rcCode = file_get_contents($test->rc, FILE_USE_INCLUDE_PATH);
+            $htmlTest = $htmlTest.$tdStart.$rcCode.$tdEnd;
+            $htmlTest = $htmlTest.$tdStart.$test->parseReturnCode.$tdEnd.$trEnd;
+            if($rcCode == $test->parseReturnCode ) // Porovnani navratove hodnoty ze skriptu s hodntou v '.rc'.
+                array_push($succesTests,$htmlTest);
+            else
+                array_push($failedTests,$htmlTest);
+            continue;
+        }else{ // Navratova hodnota z parse.php je nula.
+
+        }
+    }
+}
+
+function HTMLgenerate($succesTests,$failedTests){
+    // Sablona pro kaskadovy styl.
+    $style = "<style".">";
+    $style = $style. "table, th, td { border: 1px solid black; border-collapse: collapse; }\n";
+    $style = $style. "th, td { padding: 5px; text-align: left; }\n";
+    $style = $style. "#cntr{ text-align: center; background-color: #A9A9A9; }\n";
+    $style = $style. "#cntr1{ text-align: center; background-color: #D3D3D3; }\n";
+    $style = $style. "#cntr2{ text-align: center; background-color: green; }\n";
+    $style = $style. "#cntr3{ text-align: center; background-color: red; }\n";
+    $style = $style. "</style".">\n";
+
+    // Sablona pro tabulku.
+    $table1 = "<table style=\"width:100%\"".">\n"."<tr".">\n<th id=\"cntr";
+    $wordFailed = "3\" colspan=\"7\" >Failed</th".">";
+    $wordSucces = "2\" colspan=\"7\" >Succes</th".">";
+    $table2 = " \n</tr".">\n<tr".">\n<th id=\"cntr\" rowspan=\"2\"".">Identification</th".">\n";
+    $table2 = $table2."<th id=\"cntr\" colspan=\"2\"".">parse.php</th".">\n";
+    $table2 = $table2."<th id=\"cntr\" colspan=\"4\"".">interpret.py</th".">\n</tr".">\n";
+
+    $table2 = $table2."<tr".">\n"."<th id=\"cntr1\"".">Reference code</th".">\n";
+    $table2 = $table2."<th id=\"cntr1\"".">Script code</th".">\n";
+    $table2 = $table2."<th id=\"cntr1\"".">Reference code</th".">\n";
+    $table2 = $table2."<th id=\"cntr1\"".">Script code</th".">\n";
+    $table2 = $table2."<th id=\"cntr1\"".">Reference output</th".">\n";
+    $table2 = $table2."<th id=\"cntr1\"".">Script output</th".">\n</tr".">\n";
+
+    // Vysledna HTML5 sablona.
+    $html = "<!DOCTYPE html".">\n<html".">\n"."<head".">\n".$style."<meta charset=\"UTF-8\"".">\n"."<title";
+    $html = $html.">IPPcode2018 tests</title".">\n"."</head".">\n"."<body".">\n";
+        // Tabulka 'Failed'.
+        $html = $html.$table1.$wordFailed.$table2;
+        foreach ($failedTests as $succes) // Generovani radku tabulky.
+            $html = $html.$succes;
+        $html = $html."</table".">\n<br".">"; //Konec tabulky
+
+        // Tabulka 'Succes'.
+        $html = $html.$table1.$wordSucces.$table2;
+        foreach ($succesTests as $succes) // Generovani radku tabulky.
+            $html = $html.$succes;
+        $html = $html."</table".">\n";  // Konec tabulky.
+
+    // Pokracovani HTML5 sablony.
+    $html = $html."</body".">\n"."</html".">\n";
+    echo $html;
 }
 
 /**
@@ -253,8 +327,10 @@ $referenceTests = GenerateMissingFiles($sources, $flags);
 ParseProcess($referenceTests, $flags);
 // Zpracovani skriptu 'interpret.py'.
 InterpretProcess($referenceTests, $flags);
+// Trideni testu.
+TestSort($referenceTests,$succesTests,$failedTests);
 // Generovani HTML5 vystupu.
-HTMLgenerate($referenceTests);
+HTMLgenerate($succesTests,$failedTests);
 
 echo "Moskva";
-return 0;
+exit(0);
