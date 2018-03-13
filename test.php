@@ -47,10 +47,13 @@ function Params($count,$parameters,$flag){
 
         }elseif (preg_match("/^--directory=.+$/", $parameters[$i],$tmp ) and !($flag->flagDirectory)) {
             $flag->flagDirectory =  true;
-            $correctFolder = substr( $parameters[$i], 12 ); // Cesta k souboru. TODO more na konci musi byt /
+            $correctFolder = substr( $parameters[$i], 12 ); // Cesta k souboru.
             if(substr($correctFolder,-1) != "/")
                 $correctFolder = $correctFolder."/";
             $flag->Directory = $correctFolder;
+            // Kontrola existence adresare.
+            if(!is_dir($correctFolder))
+                ErrorOutput(10);
 
         }elseif (preg_match("/^--parse-script=.+$/", $parameters[$i],$tmp ) and !($flag->flagParse)) {
             $flag->flagParse = true;
@@ -83,15 +86,15 @@ function Params($count,$parameters,$flag){
 function ErrorOutput($number){
     switch ($number){
         case 21: // Lexikální nebo syntaktická chyba.
-            fwrite(STDERR,"21"); // TODO
+            fwrite(STDERR,"21\n");
             exit(21);
 
         case 10: // Chyba vstupnich parametru.
-            fwrite(STDERR,"Chyba"); // TODO
+            fwrite(STDERR,"Chyba vstupnich parametru.\n");
             exit(10);
 
-        case 12: // Chyba vstupnich parametru.
-            fwrite(STDERR,"12"); // TODO
+        case 12:
+            fwrite(STDERR,"Chyba pri praci se soubory\n");
             exit(12);
     }
 }
@@ -187,16 +190,13 @@ function ParseProcess($referenceTests, $flags){
         if($parseExitCode == 0) {
             $test->parseOutput = shell_exec('php5.6 ' . $flags->Parse . ' < ' . $test->src); // Vystup z parse.php.
         }
-        /*else{
-            $referenceReturnCode = file_get_contents($test->rc, FILE_USE_INCLUDE_PATH);
-            if($referenceReturnCode === false)
-                ErrorOutput(12);
-            continue;
-        }*/
     }
 }
 
-
+/** Funkce testuje soubor 'interpret.py'.
+ * @param $referenceTests - pole objektu referencnich testu.
+ * @param $flags - objekt se zvolenymi parametry skriptu.
+ */
 function InterpretProcess($referenceTests, $flags){
     foreach ($referenceTests as $test){
         if($test->parseReturnCode != "0") // Preskoci testy, ktere se nedostali za 'parse.php'.
@@ -207,13 +207,12 @@ function InterpretProcess($referenceTests, $flags){
            $filename = $filename . "x";
        }
         // Vytvoreni docasneho souboru.
-        $myfile = fopen($filename, "w") or die("Unable to open file!");
+        $myfile = fopen($filename, "w") or exit(12);
         fwrite($myfile, $test->parseOutput);
         fclose($myfile);
         // Zjisteni navratove hodnoty z python.py
-        //exec ('python3.6 interpret.py', $tmp, $interpretExitCode);
         exec('python3.6 '.$flags->Interpret.' --source='.$filename.' < '.$test->in, $tmp, $interpretExitCode);
-        $test->parseReturnCode =$interpretExitCode; // Ulozeni navratove hodnoty z interpret.py.
+        $test->interpretReturnCode =$interpretExitCode; // Ulozeni navratove hodnoty z interpret.py.
         // Zpracovani vystupu z interpret.py.
         if($interpretExitCode == 0) {
             $test->interpretOutput = shell_exec('python3.6 ' . $flags->Interpret . ' --source=' . $filename . ' < ' . $test->in);
@@ -223,6 +222,11 @@ function InterpretProcess($referenceTests, $flags){
     }
 }
 
+/**
+ * @param $referenceTests - pole objektu referencnich testu.
+ * @param $succesTests - pole uspesnych testu.
+ * @param $failedTests - pole neuspesnych testu.
+ */
 function TestSort($referenceTests, &$succesTests, &$failedTests){
     // Sablona pro HTML tagy tabulky.
     $trStart = "<tr".">\n";
@@ -237,6 +241,7 @@ function TestSort($referenceTests, &$succesTests, &$failedTests){
     foreach ($referenceTests as $test){
         $htmlTest = $trStart; // Promenna pro radek tabulky.
         $htmlTest = $htmlTest. $tdStart.substr($test->src,0,-4).$tdEnd; // Pole Identification.
+
         if($test->parseReturnCode != 0){ // Navratova hodnota z parse.php neni roven nule.
             $rcCode = file_get_contents($test->rc, FILE_USE_INCLUDE_PATH); // Nacteni souboru '.rc'.
             $htmlTest = $htmlTest.$tdStart.$rcCode.$tdEnd; // 'Parse.php' ref. vystup.
@@ -264,7 +269,7 @@ function TestSort($referenceTests, &$succesTests, &$failedTests){
                 while(file_exists($filename)){
                     $filename = $filename . "x";
                 }
-                $myfile = fopen($filename, "w") or die("Unable to open file!");
+                $myfile = fopen($filename, "w") or exit(12);
                 fwrite($myfile, $test->interpretOutput);
                 fclose($myfile);
                 $diffOutput = shell_exec('diff '.$filename.' '.$test->out);
@@ -289,6 +294,10 @@ function TestSort($referenceTests, &$succesTests, &$failedTests){
     }
 }
 
+/** Funkce na generovani vysledneho HTML souboru.
+ * @param $succesTests - pole uspesnych testu.
+ * @param $failedTests - pole neuspesnych testu.
+ */
 function HTMLgenerate($succesTests,$failedTests){
     // Sablona pro kaskadovy styl.
     $style = "<style".">";
@@ -350,7 +359,7 @@ function HelpPrint(){
     echo " --parse-script=\<file\>  -  jako parser se pouzije \<file\> =.\n";
     echo " --int-script=\<file\>  - jako interpret se pouzije \<file\>.\n";
     echo " V pripade vynechaji parametru '--parse-script' a '--int-script' se pouziji implicinti soubory ulozene ";
-    echo "v aktualnim adresari. V pripade vynechani parametru '--directory' se bude prochazet aktualni adresar.";
+    echo "v aktualnim adresari. V pripade vynechani parametru '--directory' se bude prochazet aktualni adresar.\n";
 }
 
 // Volani funkce pro zpracovani parametru skriptu.
@@ -368,5 +377,4 @@ TestSort($referenceTests,$succesTests,$failedTests);
 // Generovani HTML5 vystupu.
 HTMLgenerate($succesTests,$failedTests);
 
-echo "Moskva";
 exit(0);

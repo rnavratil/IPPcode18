@@ -1,4 +1,10 @@
 <?php
+
+/** Funkce pro osetreni vstupnich parametru.
+ * @param $count -  Pocet parametru.
+ * @param $parameters - Parametry.
+ * @param $flags - Objekt obsahujici pouzite parametry.
+ */
 function Params($count,$parameters, $flags){
 
     for($i = 1; $i < $count; $i++) {
@@ -32,6 +38,9 @@ function Params($count,$parameters, $flags){
         ErrorOutput(10);
 }
 
+/**
+ * Funkce pro vypis napovedy.
+ */
 function HelpPrint(){
     echo "Projekt do predmetu IPP. Vytvoril Rostislav Navratil v roce 2018.\n\n";
     echo "Skript typu filtr 'parse.php'napsany v jazyce PHP 5.6 nacte ze standardniho vstupu zdrojovy kod v IPPcode18";
@@ -50,31 +59,34 @@ function HelpPrint(){
     echo "--comments - volitelny parametr. Vypise do souboru \<file\> komentaru za uvodnim kodem '.IPPcode18'.\n";
 }
 
+/** Funkce pro nestandartni ukonceni skriptu.
+ * @param $number - Cislo chyby.
+ */
 function ErrorOutput($number){
     switch ($number){
         case 1:
-            fwrite(STDERR,"Nenalezeno klicove slovo '.IPPCODE18'.");
+            fwrite(STDERR,"Nenalezeno klicove slovo '.IPPCODE18'.\n");
             exit(21);
         case 2:
-            fwrite(STDERR,"Pouzit neznamy operacni kod.");
+            fwrite(STDERR,"Pouzit neznamy operacni kod.\n");
             exit(21);
         case 3:
-            fwrite(STDERR,"Operand instrukce ma spatny typ.");
+            fwrite(STDERR,"Operand instrukce ma spatny typ.\n");
             exit(21);
         case 4:
-            fwrite(STDERR,"Nespravny pocet argumentu instrukce.");
+            fwrite(STDERR,"Nespravny pocet argumentu instrukce.\n");
             exit(21);
         case 5:
-            fwrite(STDERR,"Nespravny format operandu.");
+            fwrite(STDERR,"Nespravny format operandu.\n");
             exit(21);
         case 21:
-            fwrite(STDERR,"Lexikální nebo syntaktická chyba.");
+            fwrite(STDERR,"Lexikální nebo syntaktická chyba.\n");
             exit(21);
         case 10:
-            fwrite(STDERR,"Chyba vstupnich parametru.");
+            fwrite(STDERR,"Chyba vstupnich parametru.\n");
             exit(10);
         case 12:
-            fwrite(STDERR,"Chyba pri praci s vystupnim souborem");
+            fwrite(STDERR,"Chyba pri praci s vystupnim souborem.\n");
             exit(12);
     }
 }
@@ -86,9 +98,6 @@ function ErrorOutput($number){
 function IsVariable($variable){
     if(!preg_match("/^(LF|GF|TF)@([a-zA-Z\_$\-\&\%\*]+)$/", $variable,$tmp ))
         return 0;
-        //https://wis.fit.vutbr.cz/FIT/st/phorum-msg-show.php?id=50260
-    //if(!preg_match("/^(LF|lf|lF|Lf|GF|gf|gF|Gf|TF|tf|Tf|tF)@([a-zA-Z\_$\-\&\%\*]+)$/", $variable,$tmp ))
-
     return 1;
 }
 
@@ -136,12 +145,19 @@ function GetOperand(&$line){
     return implode($operand);
 }
 
+/** Funkce zpracuje konec radku za operandy.
+ * @param $line - radek.
+ */
 function EndOfOperands($line){
     $line = trim($line, " \t");
     if($line != null)
         ErrorOutput(4);
 }
 
+/** Funkce na rozpoznavani typu operandu.
+ * @param $operand - zpracovavany operand.
+ * @return string -  typ operandu.
+ */
 function WhatType($operand){
     if(preg_match("/^bool@\S+$/", $operand,$tmp )) {
         BoolChecker($operand);
@@ -158,14 +174,20 @@ function WhatType($operand){
             return "var";
         ErrorOutput(5);
     }
-} // I know.
+}
 
+/** Funkce kontrolujici promenne typu bool.
+ * @param $operand
+ */
 function BoolChecker($operand){
     $operand = substr($operand,5);
     if(!preg_match("/^(true|false)$/", $operand,$tmp ))
         ErrorOutput(5);
 }
 
+/** /** Funkce kontrolujici promenne typu string.
+ * @param $operand
+ */
 function StringChecker($operand){
     $operand = substr($operand,7);
     $operand = htmlentities($operand); // Prevod na XML entity.
@@ -192,9 +214,8 @@ function StringChecker($operand){
     }
 }
 
-/*
- *
- *
+/** Funkce generujici XML vystup.
+ * @param $instructions - pole instrukci.
  */
 function XmlOutput($instructions){
     $xml = new DOMDocument('1.0',"UTF-8");
@@ -222,6 +243,9 @@ function XmlOutput($instructions){
     echo $xml->saveXML();
 }
 
+/** Funkce na zpracovani rozsireni STATP
+ * @param $flags
+ */
 function Statistics($flags){
     $content="";
     if($flags->flagLoc and $flags->flagComment){
@@ -253,6 +277,9 @@ function Statistics($flags){
 
 }
 
+/**
+ * Trida instrukci.
+ */
 class InstructionClass{
     public $order; // Poradi instrukce.
     public $opcode; // Hodnota operacniho kodu.
@@ -260,6 +287,9 @@ class InstructionClass{
     public $types = array(); // Typy argumentu instrukce.
 }
 
+/**
+ * Trida pouzitych parametru.
+ */
 class FlagClass{
     public $flagStatp = false;
     public $flagLoc = false;
@@ -281,8 +311,7 @@ $flags = new FlagClass();
 Params($argc, $argv, $flags);
 
 // Nacteni vstupu do pole.
-//$inputFile = explode(PHP_EOL,file_get_contents("php://stdin"));
-$inputFile = array("#MOVE s ","  .IPPcode18","move GF@fd string@3\99934" ); //DEBUG
+$inputFile = explode(PHP_EOL,file_get_contents("php://stdin"));
 
 // Zpracovani prvniho radku.
 foreach ($inputFile as $line){
@@ -290,7 +319,6 @@ foreach ($inputFile as $line){
     $line = trim($line," \t");
     // Odstraneni komentare.
     if(strpos($line, "#") !== false) {
-        //$flags->CommentNumber++; Pro rozsireni statp se budou pocitat pouze komentare ze '.IPPcode18'.
         $line = preg_replace("/#.*/", "", $line);
     }
     // Nalezeni prvniho radku.
@@ -523,4 +551,4 @@ XmlOutput($instructions);
 // Volani funkce pro vystup statistiky.
 if($flags->flagStatp)
     Statistics($flags);
-return 0;
+exit(0);
