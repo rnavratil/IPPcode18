@@ -237,18 +237,54 @@ function TestSort($referenceTests, &$succesTests, &$failedTests){
     foreach ($referenceTests as $test){
         $htmlTest = $trStart; // Promenna pro radek tabulky.
         $htmlTest = $htmlTest. $tdStart.substr($test->src,0,-4).$tdEnd; // Pole Identification.
-
         if($test->parseReturnCode != 0){ // Navratova hodnota z parse.php neni roven nule.
-            $rcCode = file_get_contents($test->rc, FILE_USE_INCLUDE_PATH);
-            $htmlTest = $htmlTest.$tdStart.$rcCode.$tdEnd;
-            $htmlTest = $htmlTest.$tdStart.$test->parseReturnCode.$tdEnd.$trEnd;
+            $rcCode = file_get_contents($test->rc, FILE_USE_INCLUDE_PATH); // Nacteni souboru '.rc'.
+            $htmlTest = $htmlTest.$tdStart.$rcCode.$tdEnd; // 'Parse.php' ref. vystup.
+            $htmlTest = $htmlTest.$tdStart.$test->parseReturnCode.$tdEnd.$trEnd; //  'Parse.php' skript vystup.
             if($rcCode == $test->parseReturnCode ) // Porovnani navratove hodnoty ze skriptu s hodntou v '.rc'.
                 array_push($succesTests,$htmlTest);
             else
                 array_push($failedTests,$htmlTest);
             continue;
-        }else{ // Navratova hodnota z parse.php je nula.
 
+        }else{ // Navratova hodnota z parse.php je nula.
+            $htmlTest = $htmlTest.$tdStart."0\n".$tdEnd; // 'Parse.php' ref. vystup.
+            $htmlTest = $htmlTest.$tdStart.$test->parseReturnCode.$tdEnd; // 'Parse.php' skript vystup.
+
+            if($test->interpretReturnCode == 0){ // Navratova hodnota z interpret.py je nula.
+                $rcContent = file_get_contents($test->rc, FILE_USE_INCLUDE_PATH); // Nacteni souboru .rc.
+                $htmlTest = $htmlTest.$tdStart.$rcContent .$tdEnd; // 'interpret.py' ref. vystup.
+                $htmlTest = $htmlTest.$tdStart."0\n".$tdEnd; // 'interpret.py' vystup skriptu.
+                $RefOutput = file_get_contents($test->out, FILE_USE_INCLUDE_PATH); // Nacteni souboru .out
+                $htmlTest = $htmlTest.$tdStart.$RefOutput.$tdEnd; // 'interpret.py' ref. vystup.
+                $htmlTest = $htmlTest.$tdStart.$test->interpretOutput.$tdEnd; // Vystup z 'interpret.py'.
+
+                // Docasny soubor k porovnani vystupu z interpretu a referencniho vystupu.
+                $filename = './TMPdiffq';
+                while(file_exists($filename)){
+                    $filename = $filename . "x";
+                }
+                $myfile = fopen($filename, "w") or die("Unable to open file!");
+                fwrite($myfile, $test->interpretOutput);
+                fclose($myfile);
+                $diffOutput = shell_exec('diff '.$filename.' '.$test->out);
+                unlink($filename);
+                if(empty($diffOutput))
+                    array_push($succesTests,$htmlTest);
+                else
+                    array_push($failedTests,$htmlTest);
+                continue;
+
+            }else{ // Navratova hodnota z interpret.py neni nula.
+                $rcCode = file_get_contents($test->rc, FILE_USE_INCLUDE_PATH);
+                $htmlTest = $htmlTest.$tdStart.$rcCode.$tdEnd;
+                $htmlTest = $htmlTest.$tdStart.$test->interpretReturnCode.$tdEnd;
+                if($rcCode == $test->interpretReturnCode) // Porovnani navratove hodnoty ze skriptu s hodntou v '.rc'.
+                    array_push($succesTests,$htmlTest);
+                else
+                    array_push($failedTests,$htmlTest);
+                continue;
+            }
         }
     }
 }
@@ -284,8 +320,8 @@ function HTMLgenerate($succesTests,$failedTests){
     $html = $html.">IPPcode2018 tests</title".">\n"."</head".">\n"."<body".">\n";
         // Tabulka 'Failed'.
         $html = $html.$table1.$wordFailed.$table2;
-        foreach ($failedTests as $succes) // Generovani radku tabulky.
-            $html = $html.$succes;
+        foreach ($failedTests as $fail) // Generovani radku tabulky.
+            $html = $html.$fail;
         $html = $html."</table".">\n<br".">"; //Konec tabulky
 
         // Tabulka 'Succes'.
