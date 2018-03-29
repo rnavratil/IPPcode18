@@ -1,12 +1,27 @@
 from sys import argv
 from re import match
+from copy import deepcopy
+import xml.etree.ElementTree as eT
 
 
-class FlagsClass:
-    source_file = ""
+class FlagClass:
+    source_file = ""  # Cesta ke vstupnimu souboru.
+    source = ""  # Obsah vstupniho souboru.
 
 
-flags = FlagsClass()  # Objekt obsahuje pouzite parametry skriptu.
+class InstructionsClass:
+    opcode = ""
+
+    def __init__(self):
+        self.arguments = []  # Pole Argumentu instrukce
+
+
+class ArgumentsClass:
+    type = ""
+    text = ""
+
+
+flags = FlagClass()  # Objekt obsahuje pouzite parametry skriptu.
 
 
 def params(flag):
@@ -45,15 +60,91 @@ def print_help():
 
 
 def error_output(number):
-    if number == 10:
+    """ Funkce na ukonceni skriptu s navratovou hodnotou jinou nez 0.
+    :param number: cislo chyby.
+    :return:
+    """
+    if number == 10:  # Chyba vstupnich parametru.
         exit(10)
+    if number == 11:  # Chyba pri otevirani vstupnich souboru.
+        exit(11)
+    if number == 12:  # Chyba pri otevirani vystupnich souboru.
+        exit(12)
+    if number == 99:  # Interni chyba.
+        exit(99)
+    if number == 31:  # Chyba XML formatu.
+        exit(31)
+    if number == 32:  # Lexikalni chyba.
+        exit(32)
 
 
-def xml_process():
-    print("TODO")
+def xml_process(flag):
+    instructions_list = []  # List instrukci programu.
+    try:
+        tree = eT.parse(flag.source_file)  # Otevreni a zpracovani vstupniho XML souboru.
+        root = tree.getroot()
+    except Exception:  # TODO upresnit
+        error_output(31)
+    else:  # TODO zjistit co dela else a co raise
+        if root.tag != "program":  # Kontrola nazvu korenoveho elementu.
+            error_output(31)
+        if root.attrib.get('language', 'None_key') == 'None_key':  # Kontrola nazvu atributu elementu.
+            error_output(31)
+        elif root.attrib.get('language') != "IPPcode18":
+            error_output(31)
+
+        root_len = len(root.attrib)  # Kontrola poctu atributu elementu.
+        if 1 > root_len or root_len > 3:
+            error_output(31)
+        if root_len == 3:  # Korenovy element obsahuje 3 atributy.
+            if root.attrib.get('name', 'None_key') == 'None_key':
+                error_output(31)
+            if root.attrib.get('description', 'None_key') == 'None_key':
+                error_output(31)
+        if root_len == 2:  # Korenovy element obsahuje 2 atributy.
+            if root.attrib.get('name', 'None_key') == 'None_key':
+                if root.attrib.get('description', 'None_key') == 'None_key':
+                    error_output(31)
+
+        # Zpracovani elementu 'instruction'.
+        order_number = 1  # pro kontrolu poradi instrukce.
+        for child in root:
+            if child.tag != "instruction":  # Kontrola nazvu elementu instrukce.
+                error_output(31)
+            if len(child.attrib) != 2:  # Kontrola poctu atributu elementu.
+                error_output(31)
+            if child.attrib.get('order', 'None_key') == 'None_key':  # Kontrola nazvu atributu elementu.
+                error_output(31)
+            if child.attrib.get('opcode', 'None_key') == 'None_key':  # Kontrola nazvu atributu elementu.
+                error_output(31)
+            if child.attrib.get('order') != str(order_number):  # Kontrola poradi instrukce.
+                error_output(31)
+            instruction = deepcopy(InstructionsClass())  # Objekt pro instrukci. TODO oddelat deepcopy
+            instruction.opcode = child.attrib.get('opcode')  # Zpracovani operacniho kodu instrukce.
+
+            # Zpracovani  elementu 'arg'.
+            arg_number = 1  # Pro kontrolu poradi argumentu
+            for arg in child:
+                argument = ArgumentsClass()  # Objekt argumentu.
+                if arg.tag[3:] != str(arg_number) or arg.tag[:3] != "arg":  # Kontrola poradi a nazvu argumentu.
+                    error_output(31)
+                print(arg.attrib, arg.text)
+                if len(arg.attrib) != 1 or arg.attrib.get('type', 'None_key') == 'None_key':  # Kontrola atributu.
+                    error_output(31)
+
+                argument.text = arg.text  # TODO posefit None
+                argument.type = arg.attrib.get('type')
+                instruction.arguments.append(argument)  # Pridani argumentu do objektu.
+                arg_number += 1
+
+            instructions_list.append(instruction)  # Ulozeni instrukce do pole instrukci.
+            order_number += 1
+        return instructions_list
 
 
-# Zpracovani parametru
+# Zpracovani parametru.
 params(flags)
-
+# Zpracovani XML programu.
+instructions = xml_process(flags)
+print("Moskva")
 exit(0)
