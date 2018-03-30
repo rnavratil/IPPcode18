@@ -128,7 +128,6 @@ def xml_process(flag):
                 argument = ArgumentsClass()  # Objekt argumentu.
                 if arg.tag[3:] != str(arg_number) or arg.tag[:3] != "arg":  # Kontrola poradi a nazvu argumentu.
                     error_output(31)
-                print(arg.attrib, arg.text)
                 if len(arg.attrib) != 1 or arg.attrib.get('type', 'None_key') == 'None_key':  # Kontrola atributu.
                     error_output(31)
 
@@ -142,9 +141,150 @@ def xml_process(flag):
         return instructions_list
 
 
+def lexical_analysis(instructions_list):
+    var_symb = ["MOVE", "NOT", "INT2CHAR", "TYPE", "STRLEN"]
+    nothing = ["CREATEFRAME", "PUSHFRAME", "POPFRAME", "RETURN", "BREAK"]
+    var_type = ["READ"]
+    label_symb_symb = ["JUMPIFEQ", "JUMPIFNEQ"]
+    var = ["DEFVAR", "POPS"]
+    label = ["CALL", "JUMP", "LABEL"]
+    symb = ["PUSHS", "WRITE", "DPRINT"]
+    var_symb_symb = ["ADD", "SUB", "MUL", "IDIV", "LT", "GT", "EQ", "AND", "OR", "STRI2INT", "CONCAT", "SETCHAR",
+                     "GETCHAR"]
+
+    for instruction in instructions_list:
+        if instruction.opcode in var_symb:
+            if len(instruction.arguments) != 2:
+                error_output(32)
+            is_variable(instruction.arguments[0])
+            is_symbol(instruction.arguments[1])
+
+        elif instruction.opcode in nothing:
+            if len(instruction.arguments) != 0:
+                error_output(32)
+
+        elif instruction.opcode in var_type:
+            if len(instruction.arguments) != 2:
+                error_output(32)
+            is_variable(instruction.arguments[0])
+            is_type(instruction.arguments[1])
+
+        elif instruction.opcode in label_symb_symb:
+            if len(instruction.arguments) != 3:
+                error_output(32)
+            is_label(instruction.arguments[0])
+            is_symbol(instruction.arguments[1])
+            is_symbol(instruction.arguments[2])
+
+        elif instruction.opcode in var:
+            if len(instruction.arguments) != 1:
+                error_output(32)
+            is_variable(instruction.arguments[0])
+
+        elif instruction.opcode in label:
+            if len(instruction.arguments) != 1:
+                error_output(32)
+            is_label(instruction.arguments[0])
+
+        elif instruction.opcode in symb:
+            if len(instruction.arguments) != 1:
+                error_output(32)
+            is_symbol(instruction.arguments[0])
+
+        elif instruction.opcode in var_symb_symb:
+            if len(instruction.arguments) != 3:
+                error_output(32)
+            is_variable(instruction.arguments[0])
+            is_symbol(instruction.arguments[1])
+            is_symbol(instruction.arguments[2])
+        else:
+            error_output(32)
+
+
+def is_variable(argument):
+    if not argument.text:
+        error_output(32)
+    if not match(r'^(LF|GF|TF)@([a-zA-Z\_$\-\&\%\*]+)$', argument.text) or argument.type != "var":  # TODO nebere cisla
+        error_output(32)
+
+
+def is_label(argument):
+    if not argument.text:
+        error_output(32)
+    if not match(r'^([a-zA-Z\_$\-\&\%\*]+)$', argument.text) or argument.type != "label":  # TODO ma to brat cisla?
+        error_output(32)
+
+
+def is_type(argument):
+    if not argument.text:
+        error_output(32)
+    type_list = ["string", "bool", "int"]
+    if argument.text not in type_list or argument.type != "type":
+        error_output(32)
+
+
+def is_symbol(argument):
+
+    if argument.type == "string":
+        if not is_string(argument):
+            error_output(32)
+    elif argument.type == "bool":
+        if not is_bool(argument):
+            error_output(32)
+    elif argument.type == "int":
+        if not is_int(argument):
+            error_output(32)
+    elif argument.type == "var":
+        if not is_variable(argument):
+            error_output(32)
+    else:
+        error_output(32)
+
+
+def is_bool(argument):
+    if not argument.text:
+        error_output(32)
+    if match(r'^(true|false)$', argument.text):
+        return 1
+    else:
+        return 0
+
+
+def is_int(argument):
+    if not argument.text:
+        error_output(32)
+    try:
+        int(argument.text)
+        return 1
+    except ValueError:
+        return 0
+
+
+def is_string(argument):
+    if not argument.text:
+        return 1
+    x = 0
+    while x < len(argument.text):
+        char = argument.text[x]
+        print(char)
+        if char == "\\":
+            if int(len(argument.text) < int(x) + 3):
+                return 0
+            escape = argument.text[x+1:]
+            if not match(r'^[0-9][0-9][0-9]$', escape[:3]):
+                return 0
+            x += 3
+        if char == "#":
+            return 0
+        x += 1
+    return 1
+
+
 # Zpracovani parametru.
 params(flags)
 # Zpracovani XML programu.
 instructions = xml_process(flags)
+# Lexikalni analyza.
+lexical_analysis(instructions)
 print("Moskva")
 exit(0)
