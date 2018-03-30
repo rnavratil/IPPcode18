@@ -24,7 +24,17 @@ class ArgumentsClass:
 flags = FlagClass()  # Objekt obsahuje pouzite parametry skriptu.
 
 
+class VariableClass:
+    frame = ""
+    type = ""
+    value = ""
+
+
 def params(flag):
+    """ Funkce pro zpracovani vstupnich argumentu skriptu.
+    :param flag: objekt obsahujici informace o zdrojovem souboru.
+    :return:
+    """
     arg_len = len(argv)  # Pocet parametru.
     use_source = False  # Osetruje duplicitu parametru.
     for x in range(1, arg_len):
@@ -49,6 +59,9 @@ def params(flag):
 
 
 def print_help():
+    """ Funkce pro vypis napovedy.
+    :return:
+    """
     help_text = """Projekt do predmetu IPP. Vytvoril Rostislav Navratil v roce 2018.\n
     Skript nacte XML reprezentaci programu ze zadaneho souboru a tento program s vyuzitim standardniho vstupu a vystupu
     interpretuje. Vstupni XML reprezentace je vytvorena ze zdrojoveho kodu v IPPcode18, napriklad skriptem parse.php.
@@ -79,6 +92,10 @@ def error_output(number):
 
 
 def xml_process(flag):
+    """ Funkce pro zpracovani vstupniho souboru skriptu (XML vystup).
+    :param flag: objekt obsahujici informace o zdrojovem souboru.
+    :return: instructions_list : pole instrukci.
+    """
     instructions_list = []  # List instrukci programu.
     try:
         tree = eT.parse(flag.source_file)  # Otevreni a zpracovani vstupniho XML souboru.
@@ -142,6 +159,10 @@ def xml_process(flag):
 
 
 def lexical_analysis(instructions_list):
+    """ Funkce provede lexikalni analyzu instrukci.
+    :param instructions_list: pole obsahujici instrukce.
+    :return:
+    """
     var_symb = ["MOVE", "NOT", "INT2CHAR", "TYPE", "STRLEN"]
     nothing = ["CREATEFRAME", "PUSHFRAME", "POPFRAME", "RETURN", "BREAK"]
     var_type = ["READ"]
@@ -202,21 +223,33 @@ def lexical_analysis(instructions_list):
 
 
 def is_variable(argument):
-    if not argument.text:
+    """ Funkce overi zda format argumentu instrukce odpovida promenne.
+    :param argument: argument instrukce.
+    :return:
+    """
+    if not argument.text:  # Kontrol zda obsahuje hodnotu.
         error_output(32)
     if not match(r'^(LF|GF|TF)@([a-zA-Z\_$\-\&\%\*]+)$', argument.text) or argument.type != "var":  # TODO nebere cisla
         error_output(32)
 
 
 def is_label(argument):
-    if not argument.text:
+    """ Funkce overi zda format argumentu instrukce odpovida navesti.
+    :param argument: argument instrukce.
+    :return:
+    """
+    if not argument.text:  # Kontrol zda obsahuje hodnotu.
         error_output(32)
     if not match(r'^([a-zA-Z\_$\-\&\%\*]+)$', argument.text) or argument.type != "label":  # TODO ma to brat cisla?
         error_output(32)
 
 
 def is_type(argument):
-    if not argument.text:
+    """ Funkce overi zda format argumentu instrukce odpovida typu.
+    :param argument: argument instrukce.
+    :return:
+    """
+    if not argument.text:  # Kontrol zda obsahuje hodnotu.
         error_output(32)
     type_list = ["string", "bool", "int"]
     if argument.text not in type_list or argument.type != "type":
@@ -224,7 +257,10 @@ def is_type(argument):
 
 
 def is_symbol(argument):
-
+    """ Funkce kontroluje format symbolu.
+    :param argument: argument instrukce.
+    :return:
+    """
     if argument.type == "string":
         if not is_string(argument):
             error_output(32)
@@ -242,7 +278,11 @@ def is_symbol(argument):
 
 
 def is_bool(argument):
-    if not argument.text:
+    """ Funkce pro kontrolu formatu hodnot typu bool.
+    :param argument:  argument instrukce.
+    :return: 1 - spravny format , 0 - chybny format.
+    """
+    if not argument.text:  # Kontrol zda obsahuje hodnotu.
         error_output(32)
     if match(r'^(true|false)$', argument.text):
         return 1
@@ -251,7 +291,11 @@ def is_bool(argument):
 
 
 def is_int(argument):
-    if not argument.text:
+    """ Funkce pro kontrolu formatu hodnot typu integer.
+    :param argument:  argument instrukce.
+    :return: 1 - spravny format , 0 - chybny format.
+    """
+    if not argument.text:  # Kontrol zda obsahuje hodnotu.
         error_output(32)
     try:
         int(argument.text)
@@ -261,23 +305,30 @@ def is_int(argument):
 
 
 def is_string(argument):
-    if not argument.text:
+    """ Funkce pro kontrolu formatu hodnot typu string.
+    :param argument:  argument instrukce.
+    :return: 1 - spravny format , 0 - chybny format.
+    """
+    if not argument.text:  # Kontrol zda obsahuje hodnotu.
         return 1
     x = 0
     while x < len(argument.text):
         char = argument.text[x]
-        print(char)
-        if char == "\\":
+        if char == "\\":  # Kontrola escape sekvenci.
             if int(len(argument.text) < int(x) + 3):
                 return 0
             escape = argument.text[x+1:]
             if not match(r'^[0-9][0-9][0-9]$', escape[:3]):
                 return 0
             x += 3
-        if char == "#":
+        if char == "#":  # Nepovolen znak.
             return 0
         x += 1
     return 1
+
+
+def interpret(instructions_list):
+    print("TODO")
 
 
 # Zpracovani parametru.
@@ -286,5 +337,7 @@ params(flags)
 instructions = xml_process(flags)
 # Lexikalni analyza.
 lexical_analysis(instructions)
+# Interpretace instrukci.
+interpret(instructions)
 print("Moskva")
 exit(0)
