@@ -1,4 +1,5 @@
 from sys import argv
+from sys import stderr
 from re import match
 from copy import deepcopy
 import xml.etree.ElementTree as eT
@@ -126,6 +127,8 @@ def error_output(number):
         exit(56)
     if number == 57:  # Deleni nulou.
         exit(57)
+    if number == 58:  # Chybna prace s retezcem
+        exit(58)
     if number == 59:  # Redefinice jiz existujici promenne.
         exit(59)
 
@@ -629,6 +632,126 @@ def interpret(instructions_list):
             result_var.value = str(result)
             var_put_in(instructions_list[x].arguments[0], result_var)
 
+        elif instructions_list[x].opcode == "CONCAT":
+            result = ""
+            for y in range(1, 3):
+                if instructions_list[x].arguments[y].type == "var":
+                    variable = get_variable(instructions_list[x].arguments[y])
+                    if not variable.type == "string":
+                        error_output(53)
+                    result += variable.value
+                elif instructions_list[x].arguments[y].type == "string":
+                    result += instructions_list[x].arguments[y].text
+                else:
+                    error_output(53)
+            result_var = VariableClass()
+            result_var.type = "string"
+            result_var.value = str(result)
+            var_put_in(instructions_list[x].arguments[0], result_var)
+
+        elif instructions_list[x].opcode == "STRLEN":
+            length = 0
+            if instructions_list[x].arguments[1].type == "var":
+                variable = get_variable(instructions_list[x].arguments[1])
+                if not variable.type == "string":
+                    error_output(53)
+                length = len(variable.value)
+            elif instructions_list[x].arguments[1].type == "string":
+                length = len(instructions_list[x].arguments[1].text)
+            else:
+                error_output(53)
+            result_var = VariableClass()
+            result_var.type = "int"
+            result_var.value = str(length)
+            var_put_in(instructions_list[x].arguments[0], result_var)
+
+        elif instructions_list[x].opcode == "GETCHAR":
+            string_text = None
+            string_len = None
+            if instructions_list[x].arguments[1].type == "var":
+                variable = get_variable(instructions_list[x].arguments[1])
+                if not variable.type == "string":
+                    error_output(53)
+                string_text = variable.vaule
+                string_len = int(len(string_text))
+            elif instructions_list[x].arguments[1].type == "string":
+                string_text = instructions_list[x].arguments[1].text
+                string_len = int(len(string_text))
+            else:
+                error_output(53)
+            char_index = None
+            if instructions_list[x].arguments[2].type == "var":
+                variable = get_variable(instructions_list[x].arguments[2])
+                if not variable.type == "int":
+                    error_output(53)
+                char_index = int(variable.value)
+            elif instructions_list[x].arguments[2].type == "int":
+                char_index = instructions_list[x].arguments[2].text
+                char_index = int(char_index)
+            else:
+                error_output(53)
+            if char_index < 0 or char_index >= string_len:
+                error_output(58)
+            result_var = VariableClass()
+            result_var.type = "string"
+            result_var.value = str(string_text[char_index])
+            var_put_in(instructions_list[x].arguments[0], result_var)
+
+        elif instructions_list[x].opcode == "SETCHAR":
+            string_text = None
+            string_len = None
+            if instructions_list[x].arguments[0].type == "var":
+                variable = get_variable(instructions_list[x].arguments[0])
+                if not variable.type == "string":
+                    error_output(53)
+                string_text = variable.vaule
+                string_len = int(len(string_text))
+            else:
+                error_output(53)
+            char_index = None
+            if instructions_list[x].arguments[1].type == "var":
+                variable = get_variable(instructions_list[x].arguments[1])
+                if not variable.type == "int":
+                    error_output(53)
+                char_index = int(variable.value)
+            elif instructions_list[x].arguments[1].type == "int":
+                char_index = instructions_list[x].arguments[1].text
+                char_index = int(char_index)
+            else:
+                error_output(53)
+            if char_index < 0 or char_index >= string_len:
+                error_output(58)
+            text_tmp = None
+            if instructions_list[x].arguments[2].type == "var":
+                variable = get_variable(instructions_list[x].arguments[2])
+                if not variable.type == "string":
+                    error_output(53)
+                if not variable.value:  # TODO projde None nebo "" ??
+                    error_output(58)
+                text_tmp = variable.value[0]
+            elif instructions_list[x].arguments[2].type == "string":
+                if not instructions_list[x].arguments[2].text:  # TODO projde None nebo "" ??
+                    error_output(58)
+                text_tmp = instructions_list[x].arguments[2].text[0]
+            else:
+                error_output(53)
+            result_text = string_text[char_index] = text_tmp
+            result_var = instructions_list[x].arguments[0]
+            result_var.type = "string"
+            result_var.value = str(result_text)
+            var_put_in(instructions_list[x].arguments[0], result_var)
+
+        elif instructions_list[x].opcode == "DPRINT":
+
+            if instructions_list[x].arguments[0].type == "var":
+                variable = get_variable(instructions_list[x].arguments[0])
+                stderr.write(variable.value)
+            else:
+                stderr.write(instructions_list[x].arguments[0].text)
+
+        elif instructions_list[x].opcode == "BREAK":
+            stderr.write("Číslo instrukce: " + str(x + 1) + "\n")
+        
         x += 1
     print("Petrohrad")
 
