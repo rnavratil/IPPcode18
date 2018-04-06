@@ -1,7 +1,7 @@
 from sys import argv
 from sys import stderr
 from re import match
-from copy import deepcopy
+from re import IGNORECASE
 import xml.etree.ElementTree as eT
 
 
@@ -29,6 +29,11 @@ class VariableClass:
     name = ""
     type = ""
     value = ""
+
+
+class LabelClass:
+    name = ""
+    number = ""
 
 
 class FrameClass:
@@ -117,6 +122,8 @@ def error_output(number):
         exit(31)
     if number == 32:  # Lexikalni chyba.
         exit(32)
+    if number == 52:  # Semanticka chyba.
+        exit(52)
     if number == 53:  # Spatny typ promenne.
         exit(53)
     if number == 54:  # Pristup k neexistujici promenne.
@@ -127,7 +134,7 @@ def error_output(number):
         exit(56)
     if number == 57:  # Deleni nulou.
         exit(57)
-    if number == 58:  # Chybna prace s retezcem
+    if number == 58:  # Chybna prace s retezcem.
         exit(58)
     if number == 59:  # Redefinice jiz existujici promenne.
         exit(59)
@@ -144,7 +151,7 @@ def xml_process(flag):
         root = tree.getroot()
     except Exception:  # TODO upresnit
         error_output(31)
-    else:  # TODO zjistit co dela else a co raise
+    else:
         if root.tag != "program":  # Kontrola nazvu korenoveho elementu.
             error_output(31)
         if root.attrib.get('language', 'None_key') == 'None_key':  # Kontrola nazvu atributu elementu.
@@ -178,7 +185,7 @@ def xml_process(flag):
                 error_output(31)
             if child.attrib.get('order') != str(order_number):  # Kontrola poradi instrukce.
                 error_output(31)
-            instruction = deepcopy(InstructionsClass())  # Objekt pro instrukci. TODO oddelat deepcopy
+            instruction = InstructionsClass()  # Objekt pro instrukci.
             instruction.opcode = child.attrib.get('opcode')  # Zpracovani operacniho kodu instrukce.
 
             # Zpracovani  elementu 'arg'.
@@ -271,7 +278,9 @@ def is_variable(argument):
     """
     if not argument.text:  # Kontrol zda obsahuje hodnotu.
         error_output(32)
-    if not match(r'^(LF|GF|TF)@([a-zA-Z\_$\-\&\%\*]+)$', argument.text) or argument.type != "var":  # TODO nebere cisla
+    if not match(r'^(LF|GF|TF)@([a-zA-Z\_\$\-\&\%\*][a-zA-Z\_\$\-\&\%\*\d]+)$', argument.text):
+        error_output(32)
+    if not argument.type == "var":
         error_output(32)
 
 
@@ -282,7 +291,9 @@ def is_label(argument):
     """
     if not argument.text:  # Kontrol zda obsahuje hodnotu.
         error_output(32)
-    if not match(r'^([a-zA-Z\_$\-\&\%\*]+)$', argument.text) or argument.type != "label":  # TODO ma to brat cisla?
+    if not match(r'^(LF|GF|TF)@([a-zA-Z\_\$\-\&\%\*][a-zA-Z\_\$\-\&\%\*\d]+)$', argument.text):
+        error_output(32)
+    if not argument.type == "label":
         error_output(32)
 
 
@@ -456,35 +467,79 @@ def var_put_in(target, symbol_par):
         error_output(54)  # Promenna se nenasla.
 
 
+def is_initialized(variable):
+    global global_frame
+    global tmp_stack
+    global frames_stack
+    global data_stack
+    if variable.value[:2] == "LF":
+        if not frames_stack.is_empty():
+            for index in range(0, frames_stack.size()):
+                if frames_stack.items[index].variables:
+                    for variable_in_frame in frames_stack.items[frames_stack.size() - 1].variables:  # Hledani promenne.
+                        if variable_in_frame.name == variable.value[3:]:
+                            return 1
+    elif variable.value[:2] == "GF":
+        if global_frame:
+            for variable_in_frame in global_frame:  # Hledani promenne.
+                if variable_in_frame.name == variable.value[3:]:
+                    return 1
+    elif variable.value[:2] == "TF":
+        if not tmp_stack.is_empty():
+            if tmp_stack.items[tmp_stack.size() - 1].variables:
+                for variable_in_frame in tmp_stack.items[tmp_stack.size() - 1].variables:  # Hledani promenne.
+                    if variable_in_frame.name == variable.value[3:]:
+                        return 1
+    return 0
+
+
 def interpret(instructions_list):
     global global_frame
     global tmp_stack
     global frames_stack
     global data_stack
 
+    labels = []
+    call_stack = StackClass()
+
     x = 0
     while x < len(instructions_list):
+        if instructions_list[x].opcode == "LABEL":
+            label_var = LabelClass()
+            label_var.name = instructions_list[x].arguments[0].text
+            label_var.number = x
+            if not labels:
+                labels.append(label_var)
+            else:
+                for in_label in labels:
+                    if in_label.name == label_var.name:
+                        error_output(52)
+                labels.append(label_var)
+        x += 1
 
-        if instructions_list[x].opcode == "CREATEFRAME":
+    x = 0
+    while x < len(instructions_list):
+        opcode = instructions_list[x].opcode
+        if opcode == "CREATEFRAME":
             frame = FrameClass()  # Vytvoreni prazdneho ramce.
             frame.name = "TF"  # Pojmenovani ramce.
             while not tmp_stack.is_empty():  # Ulozeni ramce na TMP zasobnik.
                 tmp_stack.pop()
             tmp_stack.push(frame)
 
-        elif instructions_list[x].opcode == "PUSHFRAME":
+        elif opcode == "PUSHFRAME":
             if tmp_stack.is_empty():
                 error_output(55)
             tmp_stack.items[0].name = "LF"
             frames_stack.push(tmp_stack.pop())
 
-        elif instructions_list[x].opcode == "POPFRAME":
+        elif opcode == "POPFRAME":
             if frames_stack.is_empty():
                 error_output(55)
             frames_stack.items[0].name = "TF"
             tmp_stack.push(frames_stack.pop())
 
-        elif instructions_list[x].opcode == "DEFVAR":
+        elif opcode == "DEFVAR":
             variable = VariableClass()  # Vytvoreni objektu pro promennouo.
             variable.name = instructions_list[x].arguments[0].text[3:]  # Ulozeni jejiho jmena.
             tmp_frame_type = instructions_list[x].arguments[0].text[:2]  # Ulozeni jejiho typu.
@@ -505,7 +560,7 @@ def interpret(instructions_list):
                     # error_output(59)
                 global_frame.append(variable)
 
-        elif instructions_list[x].opcode == "PUSHS":
+        elif opcode == "PUSHS":
             if instructions_list[x].arguments[0].type == "var":
                 variable_to_symb = get_variable(instructions_list[x].arguments[0])
                 variable_to_symb.name = ""
@@ -518,19 +573,19 @@ def interpret(instructions_list):
                 symbol.type = instructions_list[x].arguments[0].type
                 data_stack.push(symbol)  # Vlozeni symbolu na zasobnik.
 
-        elif instructions_list[x].opcode == "POPS":
+        elif opcode == "POPS":
             if data_stack.is_empty():
                 error_output(56)
             var_put_in(instructions_list[x].arguments[0], data_stack.pop())
 
-        elif instructions_list[x].opcode == "MOVE":
+        elif opcode == "MOVE":
             variable = instructions_list[x].arguments[0]
             symbol = VariableClass()
             symbol.type = instructions_list[x].arguments[1].type
             symbol.value = instructions_list[x].arguments[1].text
             var_put_in(variable, symbol)  # Priradi symbol promenne.
 
-        elif instructions_list[x].opcode == "ADD":
+        elif opcode == "ADD":
             result = 0
             for y in range(1, 3):
                 symbol = instructions_list[x].arguments[y]
@@ -550,7 +605,7 @@ def interpret(instructions_list):
             result_var.value = str(result)
             var_put_in(instructions_list[x].arguments[0], result_var)
 
-        elif instructions_list[x].opcode == "SUB":
+        elif opcode == "SUB":
             result = 0
             for y in range(1, 3):
                 symbol = instructions_list[x].arguments[y]
@@ -576,7 +631,7 @@ def interpret(instructions_list):
             result_var.value = str(result)
             var_put_in(instructions_list[x].arguments[0], result_var)
 
-        elif instructions_list[x].opcode == "MUL":
+        elif opcode == "MUL":
             result = 0
             for y in range(1, 3):
                 symbol = instructions_list[x].arguments[y]
@@ -602,7 +657,7 @@ def interpret(instructions_list):
             result_var.value = str(result)
             var_put_in(instructions_list[x].arguments[0], result_var)
 
-        elif instructions_list[x].opcode == "IDIV":
+        elif opcode == "IDIV":
             result = 0
             for y in range(1, 3):
                 symbol = instructions_list[x].arguments[y]
@@ -632,7 +687,7 @@ def interpret(instructions_list):
             result_var.value = str(result)
             var_put_in(instructions_list[x].arguments[0], result_var)
 
-        elif instructions_list[x].opcode == "CONCAT":
+        elif opcode == "CONCAT":
             result = ""
             for y in range(1, 3):
                 if instructions_list[x].arguments[y].type == "var":
@@ -649,7 +704,7 @@ def interpret(instructions_list):
             result_var.value = str(result)
             var_put_in(instructions_list[x].arguments[0], result_var)
 
-        elif instructions_list[x].opcode == "STRLEN":
+        elif opcode == "STRLEN":
             length = 0
             if instructions_list[x].arguments[1].type == "var":
                 variable = get_variable(instructions_list[x].arguments[1])
@@ -665,7 +720,7 @@ def interpret(instructions_list):
             result_var.value = str(length)
             var_put_in(instructions_list[x].arguments[0], result_var)
 
-        elif instructions_list[x].opcode == "GETCHAR":
+        elif opcode == "GETCHAR":
             string_text = None
             string_len = None
             if instructions_list[x].arguments[1].type == "var":
@@ -697,7 +752,7 @@ def interpret(instructions_list):
             result_var.value = str(string_text[char_index])
             var_put_in(instructions_list[x].arguments[0], result_var)
 
-        elif instructions_list[x].opcode == "SETCHAR":
+        elif opcode == "SETCHAR":
             string_text = None
             string_len = None
             if instructions_list[x].arguments[0].type == "var":
@@ -741,7 +796,7 @@ def interpret(instructions_list):
             result_var.value = str(result_text)
             var_put_in(instructions_list[x].arguments[0], result_var)
 
-        elif instructions_list[x].opcode == "DPRINT":
+        elif opcode == "DPRINT":
 
             if instructions_list[x].arguments[0].type == "var":
                 variable = get_variable(instructions_list[x].arguments[0])
@@ -749,9 +804,324 @@ def interpret(instructions_list):
             else:
                 stderr.write(instructions_list[x].arguments[0].text)
 
-        elif instructions_list[x].opcode == "BREAK":
+        elif opcode == "BREAK":
             stderr.write("Číslo instrukce: " + str(x + 1) + "\n")
-        
+
+        elif opcode == "LT" or opcode == "GT" or opcode == "EQ":
+            symbol_1 = VariableClass()
+            symbol_2 = VariableClass()
+            if instructions_list[x].arguments[1].type == "var":
+                symbol_1 = get_variable(instructions_list[x].arguments[1])
+            else:
+                symbol_1.value = instructions_list[x].arguments[1].text
+                symbol_1.type = instructions_list[x].arguments[1].type
+            if instructions_list[x].arguments[2].type == "var":
+                symbol_2 = get_variable(instructions_list[x].arguments[2])
+            else:
+                symbol_2.value = instructions_list[x].arguments[2].text
+                symbol_2.type = instructions_list[x].arguments[2].type
+            result = None
+            if symbol_1.type == "string" and symbol_2.type == "string":
+                for i in symbol_1.value:
+                    one += ord(i)
+                for i in symbol_2.value:
+                    two += ord(i)
+                if opcode == "LT":
+                    if one < two:
+                        result = "true"
+                    else:
+                        result = "false"
+                if opcode == "EQ":
+                    if one == two:
+                        result = "true"
+                    else:
+                        result = "false"
+                if opcode == "GT":
+                    if one > two:
+                        result = "true"
+                    else:
+                        result = "false"
+            if symbol_1.type == "int" and symbol_2.type == "int":
+                result_tmp = int(symbol_1.value) - int(symbol_2.value)
+                if opcode == "LT":
+                    if result_tmp < 0:
+                        result = "true"
+                    else:
+                        result = "false"
+                if opcode == "EQ":
+                    if result_tmp == 0:
+                        result = "true"
+                    else:
+                        result = "false"
+                if opcode == "GT":
+                    if result_tmp > 0:
+                        result = "true"
+                    else:
+                        result = "false"
+            if symbol_1.type == "bool" and symbol_2.type == "bool":
+                if symbol_1.value is symbol_2.value:
+                    if opcode == "GT":
+                        result = "true"
+                    else:
+                        result = "false"
+                elif symbol_1.value == "false":
+                    if opcode == "LT":
+                        result = "true"
+                    else:
+                        result = "false"
+                elif opcode == "GT":
+                    result = "true"
+                else:
+                    result = "false"
+            else:
+                error_output(53)
+            result_var = VariableClass
+            result_var.type = "bool"
+            result_var.value = result
+            var_put_in(instructions_list[x].arguments[0], result_var)
+
+        elif opcode == "AND":
+            symbol_1 = VariableClass()
+            symbol_2 = VariableClass()
+            if instructions_list[x].arguments[1].type == "var":
+                symbol_1 = get_variable(instructions_list[x].arguments[1])
+            else:
+                symbol_1.type = instructions_list[x].arguments[1].type
+                symbol_1.value = instructions_list[x].arguments[1].text
+            if instructions_list[x].arguments[2].type == "var":
+                symbol_2 = get_variable(instructions_list[x].arguments[2])
+            else:
+                symbol_2.type = instructions_list[x].arguments[2].type
+                symbol_2.value = instructions_list[x].arguments[2].text
+            if not symbol_1.type == "bool":
+                error_output(53)
+            if not symbol_2.type == "bool":
+                error_output(53)
+            one = symbol_1.value
+            two = symbol_2.value
+            if one == "false" and two == "false":
+                result = "true"
+            elif one == "true" and two == "true":
+                result = "true"
+            else:
+                result = "false"
+            variable = VariableClass()
+            variable.type = "bool"
+            variable.value = result
+            var_put_in(instructions_list[x].arguments[0], variable)
+
+        elif opcode == "OR":
+            symbol_1 = VariableClass()
+            symbol_2 = VariableClass()
+            if instructions_list[x].arguments[1].type == "var":
+                symbol_1 = get_variable(instructions_list[x].arguments[1])
+            else:
+                symbol_1.type = instructions_list[x].arguments[1].type
+                symbol_1.value = instructions_list[x].arguments[1].text
+            if instructions_list[x].arguments[2].type == "var":
+                symbol_2 = get_variable(instructions_list[x].arguments[2])
+            else:
+                symbol_2.type = instructions_list[x].arguments[2].type
+                symbol_2.value = instructions_list[x].arguments[2].text
+            if not symbol_1.type == "bool":
+                error_output(53)
+            if not symbol_2.type == "bool":
+                error_output(53)
+            one = symbol_1.value
+            two = symbol_2.value
+            result = "false"
+            if one == "true":
+                result = "true"
+            if two == "true":
+                result = "true"
+            variable = VariableClass()
+            variable.type = "bool"
+            variable.value = result
+            var_put_in(instructions_list[x].arguments[0], variable)
+
+        elif opcode == "NOT":
+            if instructions_list[x].arguments[1].type == "var":
+                symbol = get_variable(instructions_list[x].arguments[1])
+            else:
+                symbol = VariableClass()
+                symbol.type = instructions_list[x].arguments[1].type
+                symbol.value = instructions_list[x].arguments[1].text
+            if not symbol.type == "bool":
+                error_output(53)
+            if symbol.value == "true":
+                result = "false"
+            else:
+                result = "true"
+            variable = VariableClass()
+            variable.type = "bool"
+            variable.value = result
+            var_put_in(instructions_list[x].arguments[0], variable)
+
+        elif opcode == "INT2CHAR":
+            if instructions_list[x].arguments[1].type == "var":
+                symbol = get_variable(instructions_list[x].arguments[1])
+            else:
+                symbol = VariableClass()
+                symbol.type = instructions_list[x].arguments[1].type
+                symbol.value = instructions_list[x].arguments[1].text
+            result = ""
+            if symbol.type != "string":
+                error_output(53)
+            try:
+                result = chr(int(symbol.value))
+            except Exception:
+                error_output(58)
+            variable = VariableClass()
+            variable.type = "string"
+            variable.value = result
+            var_put_in(instructions_list[x].arguments[0], variable)
+
+        elif opcode == "STRI2INT":
+            symbol_1 = VariableClass()
+            symbol_2 = VariableClass()
+            if instructions_list[x].arguments[1].type == "var":
+                symbol_1 = get_variable(instructions_list[x].arguments[1])
+            else:
+                symbol_1.type = instructions_list[x].arguments[1].type
+                symbol_1.value = instructions_list[x].arguments[1].text
+            if instructions_list[x].arguments[2].type == "var":
+                symbol_2 = get_variable(instructions_list[x].arguments[2])
+            else:
+                symbol_2.type = instructions_list[x].arguments[2].type
+                symbol_2.value = instructions_list[x].arguments[2].text
+            if not symbol_1.type == "string":
+                error_output(53)
+            if not symbol_2.type == "int":
+                error_output(53)
+            if not int(symbol_2.value) < 0 and int(symbol_2.value) > (len(symbol_1.value) - 1):
+                error_output(58)
+            result = ord(symbol_1.value[int(symbol_2.value)])
+            variable = VariableClass()
+            variable.type = "int"
+            variable.value = result
+            var_put_in(instructions_list[x].arguments[0], variable)
+
+        elif opcode == "WRITE":
+            if instructions_list[x].arguments[0].type == "var":
+                variable = get_variable(instructions_list[x].arguments[0])
+                if not variable.value:
+                    error_output(56)
+                print(variable.value)
+            else:
+                print(instructions_list[x].arguments[0].text)
+
+        elif opcode == "TYPE":
+            variable = VariableClass()
+            variable.type = "type"
+            if instructions_list[x].arguments[1].type == "var":
+                symbol = get_variable(instructions_list[x].arguments[1])
+                if not is_initialized(symbol):
+                    variable.value = ""
+            else:
+                symbol.type = instructions_list[x].arguments[1].type
+                symbol.value = instructions_list[x].arguments[1].text
+            variable.value = symbol.type
+            var_put_in(instructions_list[x].arguments[0], variable)
+
+        elif opcode == "READ":
+            type_var = instructions_list[x].arguments[1].text
+            if type_var == "":
+                error_output(52)
+            input_text = None
+            try:
+                input_text = input('--> ')
+            except EOFError:
+                error_output(52)
+            result = None
+            if type_var == "string":
+                try:
+                    result = str(input_text)
+                except ValueError:
+                    error_output(52)
+            if type_var == "int":
+                try:
+                    result = int(input_text)
+                except ValueError:
+                    error_output(52)
+            if type_var == "bool":
+                if match(r'^\s*true\s*$', input_text, IGNORECASE):
+                    result = "true"
+                else:
+                    result = "flase"
+            variable = VariableClass()
+            variable.type = type_var
+            variable.value = result
+            var_put_in(instructions_list[x].arguments[0], variable)
+
+        elif opcode == "JUMP":
+            label_name = instructions_list[x].arguments[0].text
+            if not labels:
+                error_output(52)
+            else:
+                tmp_err = False
+                for in_label in labels:
+                    if in_label.name == label_name:
+                        tmp_err = True
+                        x = in_label.number
+                        break
+                if not tmp_err:
+                    error_output(52)
+
+        elif opcode == "JUMPIFEQ" or opcode == "JUMPIFNEQ":
+            label_name = instructions_list[x].arguments[0].text
+            symbol_1 = VariableClass()
+            symbol_2 = VariableClass()
+            if instructions_list[x].arguments[1].type == "var":
+                symbol_1 = get_variable(instructions_list[x].arguments[1])
+            else:
+                symbol_1.type = instructions_list[x].arguments[1].type
+                symbol_1.value = instructions_list[x].arguments[1].text
+            if instructions_list[x].arguments[2].type == "var":
+                symbol_2 = get_variable(instructions_list[x].arguments[2])
+            else:
+                symbol_2.type = instructions_list[x].arguments[2].type
+                symbol_2.value = instructions_list[x].arguments[2].text
+            if not symbol_2.type == symbol_1.type:
+                error_output(53)
+
+            if not labels:
+                error_output(52)
+            else:
+                tmp_err = False
+                for in_label in labels:
+                    if in_label.name == label_name:
+                        if opcode == "JUMPIFEQ":
+                            if symbol_1.name == symbol_2.name:
+                                tmp_err = True
+                                x = in_label.number
+                        else:
+                            if symbol_1.name == symbol_2.name:
+                                tmp_err = True
+                                x = in_label.number
+                        break
+                if not tmp_err:
+                    error_output(52)
+
+        elif opcode == "CALL":
+            label_name = instructions_list[x].arguments[0].text
+            if not labels:
+                error_output(52)
+            else:
+                tmp_err = False
+                for in_label in labels:
+                    if in_label.name == label_name:
+                        tmp_err = True
+                        call_stack.push(x + 1)
+                        x = in_label.number
+                        break
+                if not tmp_err:
+                    error_output(52)
+
+        elif opcode == "RETURN":
+            if not call_stack:
+                error_output(56)
+            x = int(call_stack.pop())
+
         x += 1
     print("Petrohrad")
 
