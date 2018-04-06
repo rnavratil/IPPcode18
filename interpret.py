@@ -2,6 +2,7 @@ from sys import argv
 from sys import stderr
 from re import match
 from re import IGNORECASE
+import codecs
 import xml.etree.ElementTree as eT
 
 
@@ -147,8 +148,9 @@ def xml_process(flag):
     """
     instructions_list = []  # List instrukci programu.
     try:
-        tree = eT.parse(flag.source_file)  # Otevreni a zpracovani vstupniho XML souboru.
-        root = tree.getroot()
+        with codecs.open(flag.source_file, "r", "utf-8") as xml_file_utf8:
+            tree = eT.parse(xml_file_utf8)  # Otevreni a zpracovani vstupniho XML souboru.
+            root = tree.getroot()
     except Exception:  # TODO upresnit
         error_output(31)
     else:
@@ -291,7 +293,7 @@ def is_label(argument):
     """
     if not argument.text:  # Kontrol zda obsahuje hodnotu.
         error_output(32)
-    if not match(r'^(LF|GF|TF)@([a-zA-Z\_\$\-\&\%\*][a-zA-Z\_\$\-\&\%\*\d]+)$', argument.text):
+    if not match(r'^[a-zA-Z\_\$\-\&\%\*][a-zA-Z\_\$\-\&\%\*\d]+$', argument.text):
         error_output(32)
     if not argument.type == "label":
         error_output(32)
