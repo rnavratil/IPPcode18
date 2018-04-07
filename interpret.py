@@ -191,18 +191,28 @@ def xml_process(flag):
             instruction.opcode = child.attrib.get('opcode')  # Zpracovani operacniho kodu instrukce.
 
             # Zpracovani  elementu 'arg'.
-            arg_number = 1  # Pro kontrolu poradi argumentu
+            arg_list = []  # Nacteni vsech argumentu do pole.
             for arg in child:
-                argument = ArgumentsClass()  # Objekt argumentu.
-                if arg.tag[3:] != str(arg_number) or arg.tag[:3] != "arg":  # Kontrola poradi a nazvu argumentu.
-                    error_output(31)
-                if len(arg.attrib) != 1 or arg.attrib.get('type', 'None_key') == 'None_key':  # Kontrola atributu.
-                    error_output(31)
+                arg_list.append(arg)
 
-                argument.text = arg.text  # TODO posefit None
-                argument.type = arg.attrib.get('type')
-                instruction.arguments.append(argument)  # Pridani argumentu do objektu.
-                arg_number += 1
+            arg_number = 1  # aktualni poradi argumentu pro zpracovani.
+            while arg_list:  # Pokud mame nezpracovane argumenty.
+                    argument = ArgumentsClass()  # Objekt argumentu.
+                    for index in range(0,  len(arg_list)):
+                        arg = arg_list[index]  # Prohledavani pole argumentu.
+                        if arg.tag[3:] == str(arg_number):  # Cislo hledaneho argumentu sedi.
+                            if not arg.tag[:3] == "arg":  # Kontrola nazvu argumentu.
+                                error_output(31)
+                            if len(arg.attrib) != 1 or arg.attrib.get('type', 'None_key') == 'None_key':
+                                error_output(31)
+                            argument.text = arg.text
+                            argument.type = arg.attrib.get('type')
+                            instruction.arguments.append(argument)  # Pridani argumentu do objektu.
+                            arg_number += 1
+                            arg_list.pop(index)
+                            break
+                        if index == len(arg_list) - 1:  # Argument chybi.
+                            error_output(31)
 
             instructions_list.append(instruction)  # Ulozeni instrukce do pole instrukci.
             order_number += 1
@@ -227,45 +237,84 @@ def lexical_analysis(instructions_list):
     for instruction in instructions_list:
         if instruction.opcode in var_symb:
             if len(instruction.arguments) != 2:
-                error_output(32)
+                error_output(31)
+            one = instruction.arguments[0].type
+            two = instruction.arguments[1].type
+            if not one == "var":
+                error_output(31)
+            if not two == "string" and two == "bool" and two == "int" and two == "var":
+                error_output(31)
             is_variable(instruction.arguments[0])
             is_symbol(instruction.arguments[1])
 
         elif instruction.opcode in nothing:
             if len(instruction.arguments) != 0:
-                error_output(32)
+                error_output(31)
 
         elif instruction.opcode in var_type:
             if len(instruction.arguments) != 2:
-                error_output(32)
+                error_output(31)
+            one = instruction.arguments[0].type
+            two = instruction.arguments[1].type
+            if not one == "var":
+                error_output(31)
+            if two != "type":
+                error_output(31)
             is_variable(instruction.arguments[0])
             is_type(instruction.arguments[1])
 
         elif instruction.opcode in label_symb_symb:
             if len(instruction.arguments) != 3:
-                error_output(32)
+                error_output(31)
+            one = instruction.arguments[0].type
+            two = instruction.arguments[1].type
+            three = instruction.arguments[2].type
+            if not one == "label":
+                error_output(31)
+            if not two == "string" and two == "bool" and two == "int" and two == "var":
+                error_output(31)
+            if not three == "string" and three == "bool" and three == "int" and three == "var":
+                error_output(31)
             is_label(instruction.arguments[0])
             is_symbol(instruction.arguments[1])
             is_symbol(instruction.arguments[2])
 
         elif instruction.opcode in var:
             if len(instruction.arguments) != 1:
-                error_output(32)
+                error_output(31)
+            one = instruction.arguments[0].type
+            if not one == "var":
+                error_output(31)
             is_variable(instruction.arguments[0])
 
         elif instruction.opcode in label:
             if len(instruction.arguments) != 1:
-                error_output(32)
+                error_output(31)
+            one = instruction.arguments[0].type
+            if not one == "label":
+                error_output(31)
             is_label(instruction.arguments[0])
 
         elif instruction.opcode in symb:
             if len(instruction.arguments) != 1:
-                error_output(32)
+                error_output(31)
+            one = instruction.arguments[0].type
+            if not one == "string" and one == "bool" and one == "int" and one == "var":
+                error_output(31)
             is_symbol(instruction.arguments[0])
 
         elif instruction.opcode in var_symb_symb:
             if len(instruction.arguments) != 3:
-                error_output(32)
+                error_output(31)
+            one = instruction.arguments[0].type
+            two = instruction.arguments[1].type
+            three = instruction.arguments[2].type
+            if not one == "var":
+                error_output(31)
+            if not two == "string" and two == "bool" and two == "int" and two == "var":
+                error_output(31)
+            if not three == "string" and three == "bool" and three == "int" and three == "var":
+                error_output(31)
             is_variable(instruction.arguments[0])
             is_symbol(instruction.arguments[1])
             is_symbol(instruction.arguments[2])
@@ -293,7 +342,7 @@ def is_label(argument):
     """
     if not argument.text:  # Kontrol zda obsahuje hodnotu.
         error_output(32)
-    if not match(r'^[a-zA-Z\_\$\-\&\%\*][a-zA-Z\_\$\-\&\%\*\d]+$', argument.text):
+    if not match(r'^[a-zA-Z\_\$\-\&\%\*][a-zA-Z\_\$\-\&\%\*\d]*$', argument.text):
         error_output(32)
     if not argument.type == "label":
         error_output(32)
@@ -429,7 +478,12 @@ def var_put_in(target, symbol_par):
 
     symbol = VariableClass()
     if symbol_par.type == "var":
-        symbol = get_variable(symbol_par)
+        arg_tmp = ArgumentsClass()
+        arg_tmp.text = symbol_par.value
+        arg_tmp.type = "var"
+        symbol = get_variable(arg_tmp)
+        if not symbol.value:
+            error_output(56)
     else:
         symbol.value = symbol_par.value
         symbol.type = symbol_par.type
@@ -573,6 +627,7 @@ def interpret(instructions_list):
                 symbol = VariableClass()  # Vytvoreni objektu pro vlozeni na datovy zasobnik.
                 symbol.value = instructions_list[x].arguments[0].text
                 symbol.type = instructions_list[x].arguments[0].type
+
                 data_stack.push(symbol)  # Vlozeni symbolu na zasobnik.
 
         elif opcode == "POPS":
@@ -600,7 +655,7 @@ def interpret(instructions_list):
                     result += int(variable_tmp.value)
                 else:
                     if not symbol.type == "int":
-                        error_output(53)
+                        error_output(52)
                     result += int(symbol.text)
             result_var = VariableClass()
             result_var.type = "int"
@@ -623,7 +678,7 @@ def interpret(instructions_list):
                         result -= int(variable_tmp.value)
                 else:
                     if not symbol.type == "int":
-                        error_output(53)
+                        error_output(52)
                     if y == 1:
                         result += int(symbol.text)
                     else:
@@ -649,7 +704,7 @@ def interpret(instructions_list):
                         result *= int(variable_tmp.value)
                 else:
                     if not symbol.type == "int":
-                        error_output(53)
+                        error_output(52)
                     if y == 1:
                         result += int(symbol.text)
                     else:
@@ -677,7 +732,7 @@ def interpret(instructions_list):
                         result = int(result / int(variable_tmp.value))
                 else:
                     if not symbol.type == "int":
-                        error_output(53)
+                        error_output(52)
                     if y == 1:
                         result += int(symbol.text)
                     else:
@@ -700,7 +755,7 @@ def interpret(instructions_list):
                 elif instructions_list[x].arguments[y].type == "string":
                     result += instructions_list[x].arguments[y].text
                 else:
-                    error_output(53)
+                    error_output(52)
             result_var = VariableClass()
             result_var.type = "string"
             result_var.value = str(result)
@@ -716,7 +771,7 @@ def interpret(instructions_list):
             elif instructions_list[x].arguments[1].type == "string":
                 length = len(instructions_list[x].arguments[1].text)
             else:
-                error_output(53)
+                error_output(52)
             result_var = VariableClass()
             result_var.type = "int"
             result_var.value = str(length)
@@ -735,7 +790,7 @@ def interpret(instructions_list):
                 string_text = instructions_list[x].arguments[1].text
                 string_len = int(len(string_text))
             else:
-                error_output(53)
+                error_output(52)
             char_index = None
             if instructions_list[x].arguments[2].type == "var":
                 variable = get_variable(instructions_list[x].arguments[2])
@@ -746,7 +801,7 @@ def interpret(instructions_list):
                 char_index = instructions_list[x].arguments[2].text
                 char_index = int(char_index)
             else:
-                error_output(53)
+                error_output(52)
             if char_index < 0 or char_index >= string_len:
                 error_output(58)
             result_var = VariableClass()
@@ -755,18 +810,18 @@ def interpret(instructions_list):
             var_put_in(instructions_list[x].arguments[0], result_var)
 
         elif opcode == "SETCHAR":
-            string_text = None
-            string_len = None
-            if instructions_list[x].arguments[0].type == "var":
+            string_text = None  # Text k modifikaci.
+            string_len = None  # Delka textu k modifikaci.
+            if instructions_list[x].arguments[0].type == "var":  # Zpracovani promenne.
                 variable = get_variable(instructions_list[x].arguments[0])
                 if not variable.type == "string":
                     error_output(53)
-                string_text = variable.vaule
+                string_text = variable.value
                 string_len = int(len(string_text))
             else:
                 error_output(53)
-            char_index = None
-            if instructions_list[x].arguments[1].type == "var":
+            char_index = None  # Index symbolu.
+            if instructions_list[x].arguments[1].type == "var":  # Zpracovani indexu v symbolu 1.
                 variable = get_variable(instructions_list[x].arguments[1])
                 if not variable.type == "int":
                     error_output(53)
@@ -775,24 +830,26 @@ def interpret(instructions_list):
                 char_index = instructions_list[x].arguments[1].text
                 char_index = int(char_index)
             else:
-                error_output(53)
-            if char_index < 0 or char_index >= string_len:
+                error_output(52)
+            if char_index < 0 or char_index >= string_len:  # Kontrola zda index znaku nepresahuje rozsah.
                 error_output(58)
-            text_tmp = None
-            if instructions_list[x].arguments[2].type == "var":
+            text_tmp = None  # Znak k nahrazeni.
+            if instructions_list[x].arguments[2].type == "var":  # Zpracovani nahrazujiciho znaku.
                 variable = get_variable(instructions_list[x].arguments[2])
                 if not variable.type == "string":
                     error_output(53)
-                if not variable.value:  # TODO projde None nebo "" ??
+                if not variable.value:
                     error_output(58)
-                text_tmp = variable.value[0]
+                text_tmp = variable.value[0]  # Prvni znak.
             elif instructions_list[x].arguments[2].type == "string":
-                if not instructions_list[x].arguments[2].text:  # TODO projde None nebo "" ??
+                if not instructions_list[x].arguments[2].text:
                     error_output(58)
-                text_tmp = instructions_list[x].arguments[2].text[0]
+                text_tmp = instructions_list[x].arguments[2].text[0]  # Prvni znak.
             else:
-                error_output(53)
-            result_text = string_text[char_index] = text_tmp
+                error_output(52)
+            string_text = list(string_text)
+            string_text[int(char_index)] = str(text_tmp)
+            result_text = str(string_text)
             result_var = instructions_list[x].arguments[0]
             result_var.type = "string"
             result_var.value = str(result_text)
@@ -890,11 +947,15 @@ def interpret(instructions_list):
             else:
                 symbol_1.type = instructions_list[x].arguments[1].type
                 symbol_1.value = instructions_list[x].arguments[1].text
+                if not symbol_1.type == "bool":
+                    error_output(52)
             if instructions_list[x].arguments[2].type == "var":
                 symbol_2 = get_variable(instructions_list[x].arguments[2])
             else:
                 symbol_2.type = instructions_list[x].arguments[2].type
                 symbol_2.value = instructions_list[x].arguments[2].text
+                if not symbol_2.type == "bool":
+                    error_output(52)
             if not symbol_1.type == "bool":
                 error_output(53)
             if not symbol_2.type == "bool":
@@ -920,11 +981,15 @@ def interpret(instructions_list):
             else:
                 symbol_1.type = instructions_list[x].arguments[1].type
                 symbol_1.value = instructions_list[x].arguments[1].text
+                if not symbol_1.type == "bool":
+                    error_output(52)
             if instructions_list[x].arguments[2].type == "var":
                 symbol_2 = get_variable(instructions_list[x].arguments[2])
             else:
                 symbol_2.type = instructions_list[x].arguments[2].type
                 symbol_2.value = instructions_list[x].arguments[2].text
+                if not symbol_2.type == "bool":
+                    error_output(52)
             if not symbol_1.type == "bool":
                 error_output(53)
             if not symbol_2.type == "bool":
@@ -947,6 +1012,8 @@ def interpret(instructions_list):
             else:
                 symbol = VariableClass()
                 symbol.type = instructions_list[x].arguments[1].type
+                if not symbol.type == "bool":
+                    error_output(52)
                 symbol.value = instructions_list[x].arguments[1].text
             if not symbol.type == "bool":
                 error_output(53)
@@ -960,14 +1027,16 @@ def interpret(instructions_list):
             var_put_in(instructions_list[x].arguments[0], variable)
 
         elif opcode == "INT2CHAR":
+            symbol = VariableClass()
             if instructions_list[x].arguments[1].type == "var":
                 symbol = get_variable(instructions_list[x].arguments[1])
             else:
-                symbol = VariableClass()
                 symbol.type = instructions_list[x].arguments[1].type
                 symbol.value = instructions_list[x].arguments[1].text
+                if symbol.type != "int":
+                    error_output(52)
             result = ""
-            if symbol.type != "string":
+            if symbol.type != "int":
                 error_output(53)
             try:
                 result = chr(int(symbol.value))
@@ -986,11 +1055,15 @@ def interpret(instructions_list):
             else:
                 symbol_1.type = instructions_list[x].arguments[1].type
                 symbol_1.value = instructions_list[x].arguments[1].text
+                if not symbol_1.type == "string":
+                    error_output(52)
             if instructions_list[x].arguments[2].type == "var":
                 symbol_2 = get_variable(instructions_list[x].arguments[2])
             else:
                 symbol_2.type = instructions_list[x].arguments[2].type
                 symbol_2.value = instructions_list[x].arguments[2].text
+                if not symbol_2.type == "int":
+                    error_output(52)
             if not symbol_1.type == "string":
                 error_output(53)
             if not symbol_2.type == "int":
@@ -1120,12 +1193,12 @@ def interpret(instructions_list):
                     error_output(52)
 
         elif opcode == "RETURN":
-            if not call_stack:
+            if call_stack.is_empty():
                 error_output(56)
-            x = int(call_stack.pop())
+            x = int(call_stack.pop() - 1)
 
         x += 1
-    print("Petrohrad")
+    # print("Petrohrad")
 
 
 # Zpracovani parametru.
@@ -1136,5 +1209,5 @@ instructions = xml_process(flags)
 lexical_analysis(instructions)
 # Interpretace instrukci.
 interpret(instructions)
-print("Moskva")
+# print("Moskva")
 exit(0)
