@@ -329,7 +329,7 @@ def is_variable(argument):
     """
     if not argument.text:  # Kontrol zda obsahuje hodnotu.
         error_output(32)
-    if not match(r'^(LF|GF|TF)@([a-zA-Z\_\$\-\&\%\*][a-zA-Z\_\$\-\&\%\*\d]+)$', argument.text):
+    if not match(r'^(LF|GF|TF)@([a-zA-Z\_\$\-\&\%\*][a-zA-Z\_\$\-\&\%\*\d]*)$', argument.text):
         error_output(32)
     if not argument.type == "var":
         error_output(32)
@@ -523,6 +523,27 @@ def var_put_in(target, symbol_par):
         error_output(54)  # Promenna se nenasla.
 
 
+def print_it(text):
+    print_text = str(text)
+    print_text_len = len(print_text)
+    result = ""
+    yy = 0
+    while yy < print_text_len:
+        char = print_text[yy]
+        yy += 1
+        if char == "\\":
+            if yy + 3 > print_text_len:
+                error_output(32)
+            escape = ""
+            for pp in range(0, 3):
+                escape += print_text[yy + pp]
+            result += chr(int(escape))
+            yy += 3
+        else:
+            result += char
+    print(result)
+
+
 def is_initialized(variable):
     global global_frame
     global tmp_stack
@@ -593,6 +614,8 @@ def interpret(instructions_list):
             if frames_stack.is_empty():
                 error_output(55)
             frames_stack.items[0].name = "TF"
+            if tmp_stack:
+                tmp_stack.pop()
             tmp_stack.push(frames_stack.pop())
 
         elif opcode == "DEFVAR":
@@ -881,6 +904,8 @@ def interpret(instructions_list):
                 symbol_2.type = instructions_list[x].arguments[2].type
             result = None
             if symbol_1.type == "string" and symbol_2.type == "string":
+                one = 0
+                two = 0
                 for i in symbol_1.value:
                     one += ord(i)
                 for i in symbol_2.value:
@@ -900,7 +925,7 @@ def interpret(instructions_list):
                         result = "true"
                     else:
                         result = "false"
-            if symbol_1.type == "int" and symbol_2.type == "int":
+            elif symbol_1.type == "int" and symbol_2.type == "int":
                 result_tmp = int(symbol_1.value) - int(symbol_2.value)
                 if opcode == "LT":
                     if result_tmp < 0:
@@ -917,9 +942,9 @@ def interpret(instructions_list):
                         result = "true"
                     else:
                         result = "false"
-            if symbol_1.type == "bool" and symbol_2.type == "bool":
-                if symbol_1.value is symbol_2.value:
-                    if opcode == "GT":
+            elif symbol_1.type == "bool" and symbol_2.type == "bool":
+                if symbol_1.value == symbol_2.value:
+                    if opcode == "EQ":
                         result = "true"
                     else:
                         result = "false"
@@ -1068,12 +1093,12 @@ def interpret(instructions_list):
                 error_output(53)
             if not symbol_2.type == "int":
                 error_output(53)
-            if not int(symbol_2.value) < 0 and int(symbol_2.value) > (len(symbol_1.value) - 1):
+            if int(symbol_2.value) < 0 or int(symbol_2.value) > (len(symbol_1.value) - 1):
                 error_output(58)
             result = ord(symbol_1.value[int(symbol_2.value)])
             variable = VariableClass()
             variable.type = "int"
-            variable.value = result
+            variable.value = str(result)
             var_put_in(instructions_list[x].arguments[0], variable)
 
         elif opcode == "WRITE":
@@ -1081,21 +1106,22 @@ def interpret(instructions_list):
                 variable = get_variable(instructions_list[x].arguments[0])
                 if not variable.value:
                     error_output(56)
-                print(variable.value)
+                print_it(variable.value)
             else:
-                print(instructions_list[x].arguments[0].text)
+                print_it(instructions_list[x].arguments[0].text)
 
         elif opcode == "TYPE":
             variable = VariableClass()
-            variable.type = "type"
+            variable.type = "string"
             if instructions_list[x].arguments[1].type == "var":
                 symbol = get_variable(instructions_list[x].arguments[1])
-                if not is_initialized(symbol):
+                if not symbol.type:
                     variable.value = ""
+                #if not is_initialized(symbol):
+                 #   variable.value = ""
             else:
                 symbol.type = instructions_list[x].arguments[1].type
                 symbol.value = instructions_list[x].arguments[1].text
-            variable.value = symbol.type
             var_put_in(instructions_list[x].arguments[0], variable)
 
         elif opcode == "READ":
@@ -1104,7 +1130,7 @@ def interpret(instructions_list):
                 error_output(52)
             input_text = None
             try:
-                input_text = input('--> ')
+                input_text = input()
             except EOFError:
                 error_output(52)
             result = None
@@ -1122,10 +1148,10 @@ def interpret(instructions_list):
                 if match(r'^\s*true\s*$', input_text, IGNORECASE):
                     result = "true"
                 else:
-                    result = "flase"
+                    result = "false"
             variable = VariableClass()
             variable.type = type_var
-            variable.value = result
+            variable.value = str(result)
             var_put_in(instructions_list[x].arguments[0], variable)
 
         elif opcode == "JUMP":
@@ -1158,24 +1184,25 @@ def interpret(instructions_list):
                 symbol_2.value = instructions_list[x].arguments[2].text
             if not symbol_2.type == symbol_1.type:
                 error_output(53)
-
             if not labels:
                 error_output(52)
             else:
                 tmp_err = False
-                for in_label in labels:
-                    if in_label.name == label_name:
-                        if opcode == "JUMPIFEQ":
-                            if symbol_1.name == symbol_2.name:
-                                tmp_err = True
-                                x = in_label.number
-                        else:
-                            if symbol_1.name == symbol_2.name:
-                                tmp_err = True
-                                x = in_label.number
+                for label_test in labels:
+                    if label_test.name == label_name:
+                        tmp_err = True
                         break
                 if not tmp_err:
                     error_output(52)
+                for in_label in labels:
+                    if in_label.name == label_name:
+                        if opcode == "JUMPIFEQ":
+                            if symbol_1.value == symbol_2.value:
+                                x = in_label.number
+                        else:
+                            if not symbol_1.value == symbol_2.value:
+                                x = in_label.number
+                        break
 
         elif opcode == "CALL":
             label_name = instructions_list[x].arguments[0].text
@@ -1198,7 +1225,7 @@ def interpret(instructions_list):
             x = int(call_stack.pop() - 1)
 
         x += 1
-    # print("Petrohrad")
+    debug_var = 1
 
 
 # Zpracovani parametru.
