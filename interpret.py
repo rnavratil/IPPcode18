@@ -9,6 +9,11 @@ import xml.etree.ElementTree as eT
 class FlagClass:
     source_file = ""  # Cesta ke vstupnimu souboru.
     source = ""  # Obsah vstupniho souboru.
+    stati = False
+    stati_file = ""
+    insts_flag = False
+    vars_flag = False
+    first = 0
 
 
 class InstructionsClass:
@@ -71,6 +76,9 @@ def params(flag):
     """
     arg_len = len(argv)  # Pocet parametru.
     use_source = False  # Osetruje duplicitu parametru.
+    use_stats = False
+    use_insts = False
+    use_vars = False
     for x in range(1, arg_len):
         parameter = (argv[x])
 
@@ -88,7 +96,37 @@ def params(flag):
             else:
                 error_output(10)
 
+        elif match(r'^--stats=.*$', parameter):
+            if not use_stats:
+                use_stats = True
+                flag.stati = True
+                flag.stati_file = parameter[8:]
+            else:
+                error_output(10)
+
+        elif match(r'^--insts$', parameter):
+            if not use_vars:
+                flag.first = 1
+            if not use_insts:
+                use_insts = True
+                flag.insts_flag = True
+            else:
+                error_output(10)
+
+        elif match(r'^--vars$', parameter):
+            if not use_insts:
+                flag.first = 2
+            if not use_vars:
+                use_vars = True
+                flag.vars_flag = True
+            else:
+                error_output(10)
+
         else:
+            error_output(10)
+
+    if use_stats:
+        if not use_insts and use_vars:
             error_output(10)
 
 
@@ -102,6 +140,11 @@ def print_help():
     \n\nZakladni parametry bez rozsireni:\n
     --help  - vypise napovedu. Nelze ho kombinovat s jinymi parametry.\n
     --source=<file>  -  <file> = nazev XML reprezentace programu. Muze byt zadan absolutni, nebo relativni cestou.
+    \n\nRozsireni STATI:\n
+    Podle pouzitych parametru ulozi informace do zadaneho souboru.
+    --stats=<file>  -  <file> = Vystupni soubor.\n
+    --vars   = Maximalni pocet inicializovanych promennych v jeden okamzik.
+    --insts  = Pocet vykonanych instrukci 
     """
     print(help_text)
 
@@ -151,7 +194,7 @@ def xml_process(flag):
         with codecs.open(flag.source_file, "r", "utf-8") as xml_file_utf8:
             tree = eT.parse(xml_file_utf8)  # Otevreni a zpracovani vstupniho XML souboru.
             root = tree.getroot()
-    except Exception:  # TODO upresnit
+    except Exception:
         error_output(31)
     else:
         if root.tag != "program":  # Kontrola nazvu korenoveho elementu.
@@ -544,30 +587,82 @@ def print_it(text):
     print(result)
 
 
-def is_initialized(variable):
+def is_declared(var_name):
     global global_frame
     global tmp_stack
     global frames_stack
-    global data_stack
-    if variable.value[:2] == "LF":
+
+    if var_name[:2] == "LF":
         if not frames_stack.is_empty():
             for index in range(0, frames_stack.size()):
                 if frames_stack.items[index].variables:
-                    for variable_in_frame in frames_stack.items[frames_stack.size() - 1].variables:  # Hledani promenne.
-                        if variable_in_frame.name == variable.value[3:]:
+                    for variable_in_frame in frames_stack.items[index].variables:  # Hledani promenne.
+                        if variable_in_frame.name == var_name[3:]:
                             return 1
-    elif variable.value[:2] == "GF":
+    elif var_name[:2] == "GF":
         if global_frame:
             for variable_in_frame in global_frame:  # Hledani promenne.
-                if variable_in_frame.name == variable.value[3:]:
+                if variable_in_frame.name == var_name[3:]:
                     return 1
-    elif variable.value[:2] == "TF":
+    elif var_name[:2] == "TF":
         if not tmp_stack.is_empty():
             if tmp_stack.items[tmp_stack.size() - 1].variables:
                 for variable_in_frame in tmp_stack.items[tmp_stack.size() - 1].variables:  # Hledani promenne.
-                    if variable_in_frame.name == variable.value[3:]:
+                    if variable_in_frame.name == var_name[3:]:
                         return 1
     return 0
+
+
+def count_var():
+    global global_frame
+    global tmp_stack
+    global frames_stack
+    number = 0
+    if global_frame:
+        number += len(global_frame)
+    if not tmp_stack.is_empty():
+        if tmp_stack.items[tmp_stack.size() - 1].variables:
+            number += len(tmp_stack.items[tmp_stack.size() - 1].variables)
+    if not frames_stack.is_empty():
+        for index in range(0, frames_stack.size()):
+            number += len(frames_stack.items[index].variables)
+    return number
+
+
+statistic_var = 0
+
+
+def max_count_var():
+    global statistic_var
+    new_count = count_var()
+    if new_count > statistic_var:
+        statistic_var = new_count
+
+
+def statistic(insts, flag):
+    global statistic_var
+    result = ""
+    if flag.vars_flag and flag.insts_flag:
+        if flag.first == 1:
+            result += str(insts)
+            result += "\n"
+            result += str(statistic_var)
+        elif flag.first == 2:
+            result += str(statistic_var)
+            result += "\n"
+            result += str(insts)
+    elif flag.vars_flag:
+        result += str(statistic_var)
+    elif flag.insts_flag:
+        result += str(insts)
+    result += "\n"
+
+    try:
+        text_file = open(flag.stati_file, "w")
+        text_file.write(result)
+        text_file.close()
+    except IOError:
+        error_output(12)
 
 
 def interpret(instructions_list):
@@ -578,6 +673,7 @@ def interpret(instructions_list):
 
     labels = []
     call_stack = StackClass()
+    stati_count = 0
 
     x = 0
     while x < len(instructions_list):
@@ -598,48 +694,52 @@ def interpret(instructions_list):
     while x < len(instructions_list):
         opcode = instructions_list[x].opcode
         if opcode == "CREATEFRAME":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             frame = FrameClass()  # Vytvoreni prazdneho ramce.
             frame.name = "TF"  # Pojmenovani ramce.
             while not tmp_stack.is_empty():  # Ulozeni ramce na TMP zasobnik.
                 tmp_stack.pop()
             tmp_stack.push(frame)
+            max_count_var()  # Rozsireni STATI
 
         elif opcode == "PUSHFRAME":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             if tmp_stack.is_empty():
                 error_output(55)
             tmp_stack.items[0].name = "LF"
             frames_stack.push(tmp_stack.pop())
 
         elif opcode == "POPFRAME":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             if frames_stack.is_empty():
                 error_output(55)
             frames_stack.items[0].name = "TF"
             if tmp_stack:
                 tmp_stack.pop()
             tmp_stack.push(frames_stack.pop())
+            max_count_var()  # Rozsireni STATI
 
         elif opcode == "DEFVAR":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             variable = VariableClass()  # Vytvoreni objektu pro promennouo.
             variable.name = instructions_list[x].arguments[0].text[3:]  # Ulozeni jejiho jmena.
             tmp_frame_type = instructions_list[x].arguments[0].text[:2]  # Ulozeni jejiho typu.
+            if is_declared(instructions_list[x].arguments[0].text):
+                error_output(59)
             if tmp_frame_type == "TF":
                 if tmp_stack.is_empty():
                     error_output(55)
-                # if is_variable_in_frame(variable.name, tmp_stack, frames_stack, global_frame):
-                    # error_output(59)
-                tmp_stack.items[0].variables.append(variable)  # TODO co kdyz je to prazdny nazev
+                tmp_stack.items[0].variables.append(variable)
             elif tmp_frame_type == "LF":
                 if frames_stack.is_empty():
                     error_output(55)
-                # if is_variable_in_frame(variable.name, tmp_stack, frames_stack, global_frame):
-                    # error_output(59)
                 frames_stack.items[frames_stack.size() - 1].variables.append(variable)
             elif tmp_frame_type == "GF":
-                # if is_variable_in_frame(variable.name, tmp_stack, frames_stack, global_frame):
-                    # error_output(59)
                 global_frame.append(variable)
+            max_count_var()  # Rozsireni STATI
 
         elif opcode == "PUSHS":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             if instructions_list[x].arguments[0].type == "var":
                 variable_to_symb = get_variable(instructions_list[x].arguments[0])
                 variable_to_symb.name = ""
@@ -654,11 +754,13 @@ def interpret(instructions_list):
                 data_stack.push(symbol)  # Vlozeni symbolu na zasobnik.
 
         elif opcode == "POPS":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             if data_stack.is_empty():
                 error_output(56)
             var_put_in(instructions_list[x].arguments[0], data_stack.pop())
 
         elif opcode == "MOVE":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             variable = instructions_list[x].arguments[0]
             symbol = VariableClass()
             symbol.type = instructions_list[x].arguments[1].type
@@ -666,6 +768,7 @@ def interpret(instructions_list):
             var_put_in(variable, symbol)  # Priradi symbol promenne.
 
         elif opcode == "ADD":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             result = 0
             for y in range(1, 3):
                 symbol = instructions_list[x].arguments[y]
@@ -686,6 +789,7 @@ def interpret(instructions_list):
             var_put_in(instructions_list[x].arguments[0], result_var)
 
         elif opcode == "SUB":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             result = 0
             for y in range(1, 3):
                 symbol = instructions_list[x].arguments[y]
@@ -712,6 +816,7 @@ def interpret(instructions_list):
             var_put_in(instructions_list[x].arguments[0], result_var)
 
         elif opcode == "MUL":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             result = 0
             for y in range(1, 3):
                 symbol = instructions_list[x].arguments[y]
@@ -738,6 +843,7 @@ def interpret(instructions_list):
             var_put_in(instructions_list[x].arguments[0], result_var)
 
         elif opcode == "IDIV":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             result = 0
             for y in range(1, 3):
                 symbol = instructions_list[x].arguments[y]
@@ -768,6 +874,7 @@ def interpret(instructions_list):
             var_put_in(instructions_list[x].arguments[0], result_var)
 
         elif opcode == "CONCAT":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             result = ""
             for y in range(1, 3):
                 if instructions_list[x].arguments[y].type == "var":
@@ -785,14 +892,21 @@ def interpret(instructions_list):
             var_put_in(instructions_list[x].arguments[0], result_var)
 
         elif opcode == "STRLEN":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             length = 0
             if instructions_list[x].arguments[1].type == "var":
                 variable = get_variable(instructions_list[x].arguments[1])
                 if not variable.type == "string":
                     error_output(53)
-                length = len(variable.value)
+                if not variable.value:
+                    length = 0
+                else:
+                    length = len(variable.value)
             elif instructions_list[x].arguments[1].type == "string":
-                length = len(instructions_list[x].arguments[1].text)
+                if not instructions_list[x].arguments[1].text:
+                    length = 0
+                else:
+                    length = len(instructions_list[x].arguments[1].text)
             else:
                 error_output(52)
             result_var = VariableClass()
@@ -801,13 +915,14 @@ def interpret(instructions_list):
             var_put_in(instructions_list[x].arguments[0], result_var)
 
         elif opcode == "GETCHAR":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             string_text = None
             string_len = None
             if instructions_list[x].arguments[1].type == "var":
                 variable = get_variable(instructions_list[x].arguments[1])
                 if not variable.type == "string":
                     error_output(53)
-                string_text = variable.vaule
+                string_text = variable.value
                 string_len = int(len(string_text))
             elif instructions_list[x].arguments[1].type == "string":
                 string_text = instructions_list[x].arguments[1].text
@@ -833,6 +948,7 @@ def interpret(instructions_list):
             var_put_in(instructions_list[x].arguments[0], result_var)
 
         elif opcode == "SETCHAR":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             string_text = None  # Text k modifikaci.
             string_len = None  # Delka textu k modifikaci.
             if instructions_list[x].arguments[0].type == "var":  # Zpracovani promenne.
@@ -879,7 +995,7 @@ def interpret(instructions_list):
             var_put_in(instructions_list[x].arguments[0], result_var)
 
         elif opcode == "DPRINT":
-
+            stati_count += 1  # Statistika vykonanych isntrukci.
             if instructions_list[x].arguments[0].type == "var":
                 variable = get_variable(instructions_list[x].arguments[0])
                 stderr.write(variable.value)
@@ -887,9 +1003,12 @@ def interpret(instructions_list):
                 stderr.write(instructions_list[x].arguments[0].text)
 
         elif opcode == "BREAK":
-            stderr.write("Číslo instrukce: " + str(x + 1) + "\n")
+            stati_count += 1  # Statistika vykonanych isntrukci.
+            stderr.write("císlo instrukce: " + str(x + 1) + "\n")
+            stderr.write("Pocet vykonanych instrukci: " + str(stati_count) + "\n")
 
         elif opcode == "LT" or opcode == "GT" or opcode == "EQ":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             symbol_1 = VariableClass()
             symbol_2 = VariableClass()
             if instructions_list[x].arguments[1].type == "var":
@@ -965,6 +1084,7 @@ def interpret(instructions_list):
             var_put_in(instructions_list[x].arguments[0], result_var)
 
         elif opcode == "AND":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             symbol_1 = VariableClass()
             symbol_2 = VariableClass()
             if instructions_list[x].arguments[1].type == "var":
@@ -999,6 +1119,7 @@ def interpret(instructions_list):
             var_put_in(instructions_list[x].arguments[0], variable)
 
         elif opcode == "OR":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             symbol_1 = VariableClass()
             symbol_2 = VariableClass()
             if instructions_list[x].arguments[1].type == "var":
@@ -1032,6 +1153,7 @@ def interpret(instructions_list):
             var_put_in(instructions_list[x].arguments[0], variable)
 
         elif opcode == "NOT":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             if instructions_list[x].arguments[1].type == "var":
                 symbol = get_variable(instructions_list[x].arguments[1])
             else:
@@ -1052,6 +1174,7 @@ def interpret(instructions_list):
             var_put_in(instructions_list[x].arguments[0], variable)
 
         elif opcode == "INT2CHAR":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             symbol = VariableClass()
             if instructions_list[x].arguments[1].type == "var":
                 symbol = get_variable(instructions_list[x].arguments[1])
@@ -1065,7 +1188,9 @@ def interpret(instructions_list):
                 error_output(53)
             try:
                 result = chr(int(symbol.value))
-            except Exception:
+            except OverflowError:
+                error_output(58)
+            except ValueError:
                 error_output(58)
             variable = VariableClass()
             variable.type = "string"
@@ -1073,6 +1198,7 @@ def interpret(instructions_list):
             var_put_in(instructions_list[x].arguments[0], variable)
 
         elif opcode == "STRI2INT":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             symbol_1 = VariableClass()
             symbol_2 = VariableClass()
             if instructions_list[x].arguments[1].type == "var":
@@ -1102,6 +1228,7 @@ def interpret(instructions_list):
             var_put_in(instructions_list[x].arguments[0], variable)
 
         elif opcode == "WRITE":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             if instructions_list[x].arguments[0].type == "var":
                 variable = get_variable(instructions_list[x].arguments[0])
                 if not variable.value:
@@ -1111,20 +1238,22 @@ def interpret(instructions_list):
                 print_it(instructions_list[x].arguments[0].text)
 
         elif opcode == "TYPE":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             variable = VariableClass()
             variable.type = "string"
             if instructions_list[x].arguments[1].type == "var":
                 symbol = get_variable(instructions_list[x].arguments[1])
                 if not symbol.type:
                     variable.value = ""
-                #if not is_initialized(symbol):
-                 #   variable.value = ""
+                else:
+                    variable.value = symbol.type
             else:
-                symbol.type = instructions_list[x].arguments[1].type
-                symbol.value = instructions_list[x].arguments[1].text
+                variable.type = instructions_list[x].arguments[1].type
+                variable.value = instructions_list[x].arguments[1].text
             var_put_in(instructions_list[x].arguments[0], variable)
 
         elif opcode == "READ":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             type_var = instructions_list[x].arguments[1].text
             if type_var == "":
                 error_output(52)
@@ -1155,6 +1284,7 @@ def interpret(instructions_list):
             var_put_in(instructions_list[x].arguments[0], variable)
 
         elif opcode == "JUMP":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             label_name = instructions_list[x].arguments[0].text
             if not labels:
                 error_output(52)
@@ -1169,6 +1299,7 @@ def interpret(instructions_list):
                     error_output(52)
 
         elif opcode == "JUMPIFEQ" or opcode == "JUMPIFNEQ":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             label_name = instructions_list[x].arguments[0].text
             symbol_1 = VariableClass()
             symbol_2 = VariableClass()
@@ -1205,6 +1336,7 @@ def interpret(instructions_list):
                         break
 
         elif opcode == "CALL":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             label_name = instructions_list[x].arguments[0].text
             if not labels:
                 error_output(52)
@@ -1220,12 +1352,13 @@ def interpret(instructions_list):
                     error_output(52)
 
         elif opcode == "RETURN":
+            stati_count += 1  # Statistika vykonanych isntrukci.
             if call_stack.is_empty():
                 error_output(56)
             x = int(call_stack.pop() - 1)
 
         x += 1
-    debug_var = 1
+    return stati_count
 
 
 # Zpracovani parametru.
@@ -1235,6 +1368,8 @@ instructions = xml_process(flags)
 # Lexikalni analyza.
 lexical_analysis(instructions)
 # Interpretace instrukci.
-interpret(instructions)
-# print("Moskva")
+stati_ins = interpret(instructions)
+# Rozsireni STATI.
+if flags.stati:
+    statistic(stati_ins, flags)
 exit(0)
