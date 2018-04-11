@@ -6,50 +6,50 @@ import codecs
 import xml.etree.ElementTree as eT
 
 
-class FlagClass:
+class FlagClass:  # Trida pro informace ze vstupnich parametru.
     source_file = ""  # Cesta ke vstupnimu souboru.
     source = ""  # Obsah vstupniho souboru.
-    stati = False
-    stati_file = ""
-    insts_flag = False
-    vars_flag = False
-    first = 0
+    stati = False  # Pouziti rozsireni STATI.
+    stati_file = ""  # STATI - vystupni soubor.
+    insts_flag = False  # STATI - pocet vykonanych instrukci.
+    vars_flag = False  # STATI - nejvetsi pocet promennych v jednu dobu.
+    first = 0  # STATI - indentifikace prvniho parametru.
 
 
-class InstructionsClass:
-    opcode = ""
+class InstructionsClass:  # Trida pro instrukci.
+    opcode = ""  # Operacni kod instrukce.
 
     def __init__(self):
-        self.arguments = []  # Pole Argumentu instrukce
+        self.arguments = []  # Pole argumentu instrukce.
 
 
-class ArgumentsClass:
-    type = ""
-    text = ""
+class ArgumentsClass:  # Trida pro operand instrukce.
+    type = ""  # Typ promenne.
+    text = ""  # Hodnota promenne.
 
 
 flags = FlagClass()  # Objekt obsahuje pouzite parametry skriptu.
 
 
-class VariableClass:
-    name = ""
-    type = ""
-    value = ""
+class VariableClass:  # Trida pro promennou.
+    name = ""  # Nazev promenne.
+    type = ""  # Typ promenne.
+    value = ""  # Hodnota promenne.
 
 
-class LabelClass:
-    name = ""
-    number = ""
+class LabelClass:  # Trida pro navesti.
+    name = ""  # Nazev promenne.
+    number = ""  # Hodnota promenne.
 
 
-class FrameClass:
+class FrameClass:  # Trida ramce.
     name = ""
 
     def __init__(self):
         self.variables = []  # Pole promennych ramce
 
 
-class StackClass:
+class StackClass:  # Trida pro zasobnik.
     def __init__(self):
         self.items = []
 
@@ -67,6 +67,12 @@ class StackClass:
 
     def peek(self):
         return self.items[len(self.items)-1]
+
+
+tmp_stack = StackClass()  # Docasny ramec.
+frames_stack = StackClass()  # Zasobnik ramcu.
+global_frame = []  # Globalni ramec.
+data_stack = StackClass()  # Datovy zasobnik.
 
 
 def params(flag):
@@ -125,8 +131,8 @@ def params(flag):
         else:
             error_output(10)
 
-    if use_stats:
-        if not use_insts and use_vars:
+    if use_stats:  # Osetreni kombinace pouzitych parametru.
+        if not use_insts and not use_vars:
             error_output(10)
 
 
@@ -279,7 +285,7 @@ def lexical_analysis(instructions_list):
 
     for instruction in instructions_list:
         if instruction.opcode in var_symb:
-            if len(instruction.arguments) != 2:
+            if len(instruction.arguments) != 2:  # Kontrola poctu operandu.
                 error_output(31)
             one = instruction.arguments[0].type
             two = instruction.arguments[1].type
@@ -473,13 +479,11 @@ def is_string(argument):
     return 1
 
 
-tmp_stack = StackClass()
-frames_stack = StackClass()
-global_frame = []
-data_stack = StackClass()
-
-
 def get_variable(variable):
+    """ Funkce pro nalezeni promenne v danem ramci.
+    :param variable: Hledana promenna.
+    :return: Nalezena promenna.
+    """
     global global_frame
     global tmp_stack
     global frames_stack
@@ -514,6 +518,11 @@ def get_variable(variable):
 
 
 def var_put_in(target, symbol_par):
+    """ Vlozi hodnotu a typ dane promenne.
+    :param target: Modifikovana promenna.
+    :param symbol_par: Nova hodnota a typ.
+    :return:
+    """
     global global_frame
     global tmp_stack
     global frames_stack
@@ -567,11 +576,15 @@ def var_put_in(target, symbol_par):
 
 
 def print_it(text):
+    """ Pomocna funkce instrukce "WRITE" pro vypis textu na STDOUT.
+    :param text: Text k vystupu.
+    :return:
+    """
     print_text = str(text)
     print_text_len = len(print_text)
     result = ""
     yy = 0
-    while yy < print_text_len:
+    while yy < print_text_len:  # Zpracovani escape sekvenci.
         char = print_text[yy]
         yy += 1
         if char == "\\":
@@ -588,6 +601,10 @@ def print_it(text):
 
 
 def is_declared(var_name):
+    """ Funkce ktera zjisti zda je jiz promenna deklarovana.
+    :param var_name: Jmeno promenne.
+    :return:
+    """
     global global_frame
     global tmp_stack
     global frames_stack
@@ -614,6 +631,9 @@ def is_declared(var_name):
 
 
 def count_var():
+    """ Funkce pocita promenne pro rozsireni STATI.
+    :return:
+    """
     global global_frame
     global tmp_stack
     global frames_stack
@@ -629,10 +649,13 @@ def count_var():
     return number
 
 
-statistic_var = 0
+statistic_var = 0  # Promenna urcuje maximalni pocet promennych.
 
 
 def max_count_var():
+    """ STATI - porovnani nejvyssiho poctu promennych.
+    :return:
+    """
     global statistic_var
     new_count = count_var()
     if new_count > statistic_var:
@@ -640,6 +663,11 @@ def max_count_var():
 
 
 def statistic(insts, flag):
+    """ STATI - Funkce pro vypis statistickych dat do souboru.
+    :param insts: pocet instrukci.
+    :param flag: data ze vstupnich parametru.
+    :return:
+    """
     global statistic_var
     result = ""
     if flag.vars_flag and flag.insts_flag:
@@ -665,19 +693,58 @@ def statistic(insts, flag):
         error_output(12)
 
 
+def print_break():
+    """ Funkce pro vypis informaci na STDERR.
+    :return:
+    """
+    global global_frame
+    global tmp_stack
+    global frames_stack
+
+    stderr.write("ZASOBNIK RAMCU:")
+    if not frames_stack.is_empty():
+        for index in range(0, frames_stack.size()):
+            if frames_stack.items[index].variables:
+                stderr.write("\nramec[" + str(index) + "]: \n")
+                for var_tmp in frames_stack.items[index].variables:  # Hledani promenne.
+                    tmp_type = var_tmp.type
+                    tmp_value = var_tmp.value
+                    stderr.write("\t" + var_tmp.name + "(" + tmp_type + ") = " + tmp_value + "\n")
+
+    stderr.write("\nGLOBALNI RAMEC: \n")
+    if global_frame:
+        for var_tmp in global_frame:  # Hledani promenne.
+            tmp_type = var_tmp.type
+            tmp_value = var_tmp.value
+            stderr.write("\t" + var_tmp.name + "(" + tmp_type + ") = " + tmp_value + "\n")
+
+    stderr.write("\nDOCASNY RAMEC: \n")
+    if not tmp_stack.is_empty():
+        if tmp_stack.items[tmp_stack.size() - 1].variables:
+            for var_tmp in tmp_stack.items[tmp_stack.size() - 1].variables:  # Hledani promenne.
+                tmp_type = var_tmp.type
+                tmp_value = var_tmp.value
+                stderr.write("\t" + var_tmp.name + "(" + tmp_type + ") = " + tmp_value + "\n")
+
+
 def interpret(instructions_list):
+    """ Funkce pro zpracovani instrukci.
+    :param instructions_list: Pole instrukci.
+    :return: Pocet vykonanych instrukci.
+    """
     global global_frame
     global tmp_stack
     global frames_stack
     global data_stack
 
-    labels = []
-    call_stack = StackClass()
-    stati_count = 0
+    labels = []  # Pole navesti.
+    call_stack = StackClass()  # Zasobnik volani.
+    stati_count = 0  # Pocatecni pocet vykonanych instrukci.
 
     x = 0
-    while x < len(instructions_list):
+    while x < len(instructions_list):  # Nalezeni navesti.
         if instructions_list[x].opcode == "LABEL":
+            stati_count += 1   # Statistika vykonanych isntrukci.
             label_var = LabelClass()
             label_var.name = instructions_list[x].arguments[0].text
             label_var.number = x
@@ -690,8 +757,8 @@ def interpret(instructions_list):
                 labels.append(label_var)
         x += 1
 
-    x = 0
-    while x < len(instructions_list):
+    x = 0  # aktualni cislo instrukce.
+    while x < len(instructions_list):  # Zpracovani instrukci
         opcode = instructions_list[x].opcode
         if opcode == "CREATEFRAME":
             stati_count += 1  # Statistika vykonanych isntrukci.
@@ -1004,8 +1071,9 @@ def interpret(instructions_list):
 
         elif opcode == "BREAK":
             stati_count += 1  # Statistika vykonanych isntrukci.
-            stderr.write("císlo instrukce: " + str(x + 1) + "\n")
+            stderr.write("Cislo instrukce: " + str(x + 1) + "\n")
             stderr.write("Pocet vykonanych instrukci: " + str(stati_count) + "\n")
+            print_break()
 
         elif opcode == "LT" or opcode == "GT" or opcode == "EQ":
             stati_count += 1  # Statistika vykonanych isntrukci.
@@ -1357,7 +1425,7 @@ def interpret(instructions_list):
                 error_output(56)
             x = int(call_stack.pop() - 1)
 
-        x += 1
+        x += 1  # Inkrementace instrukce.
     return stati_count
 
 
